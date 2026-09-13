@@ -17,7 +17,13 @@
  */
 
 import { Client, type TokenCache, type CachedToken } from "@caido/sdk-client";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from "fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  renameSync,
+} from "fs";
 import { homedir } from "os";
 import { join, dirname } from "path";
 
@@ -32,14 +38,16 @@ const DEFAULT_URL = "http://localhost:8080";
  */
 export function canonicalUrl(u: string): string {
   const s = u.trim().replace(/\/+$/, "");
-  return s.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]+)/, (m) => m.toLowerCase());
+  return s.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]+)/, (m) =>
+    m.toLowerCase(),
+  );
 }
 
 export type AuthMode = "pat" | "cached-token";
 
 export interface CaidoConfig {
   url: string;
-  pat: string;         // empty string when authMode === "cached-token"
+  pat: string; // empty string when authMode === "cached-token"
   authMode: AuthMode;
 }
 
@@ -67,7 +75,11 @@ function readSecretsFile(): Record<string, any> {
 /** Migrate the legacy flat `.caido` ({ url, pat, proxy, cachedToken, …dead keys }) to URL-keyed. */
 function normalizeRoot(raw: any): CaidoRoot {
   if (!raw || typeof raw !== "object") return { instances: {} };
-  if (raw.instances && typeof raw.instances === "object" && !Array.isArray(raw.instances)) {
+  if (
+    raw.instances &&
+    typeof raw.instances === "object" &&
+    !Array.isArray(raw.instances)
+  ) {
     return { default: raw.default, instances: raw.instances };
   }
 
@@ -102,7 +114,11 @@ function writeCaidoRoot(root: CaidoRoot): void {
 }
 
 /** Create/merge one instance's config (and optionally make it the default/active one). */
-export function upsertCaidoInstance(url: string, patch: Partial<CaidoInstance>, setDefault = false): void {
+export function upsertCaidoInstance(
+  url: string,
+  patch: Partial<CaidoInstance>,
+  setDefault = false,
+): void {
   const key = canonicalUrl(url);
   const root = readCaidoRoot();
   root.instances = root.instances ?? {};
@@ -182,17 +198,20 @@ export function loadConfig(): CaidoConfig {
   const envPat = process.env.CAIDO_PAT;
   if (envPat) return { url, pat: envPat, authMode: "pat" };
   if (instance.pat) return { url, pat: instance.pat, authMode: "pat" };
-  if (isCachedTokenValid(instance)) return { url, pat: "", authMode: "cached-token" };
+  if (isCachedTokenValid(instance))
+    return { url, pat: "", authMode: "cached-token" };
 
   if (instance.cachedToken?.accessToken) {
-    console.error(`Error: Cached access token for ${url} expired at ${instance.cachedToken.expiresAt}.`);
-    console.error(`Re-run: npx tsx caido-client.ts setup <pat> ${url}`);
+    console.error(
+      `Error: Cached access token for ${url} expired at ${instance.cachedToken.expiresAt}.`,
+    );
+    console.error(`Re-run: caido-client setup <pat> ${url}`);
   } else {
     console.error(`Error: No Caido auth found for instance ${url}.`);
     console.error("  - No PAT in env (CAIDO_PAT) or stored for this instance");
     console.error("  - No unexpired cached token for this instance");
     console.error("");
-    console.error(`Setup: npx tsx caido-client.ts setup <pat> ${url}`);
+    console.error(`Setup: caido-client setup <pat> ${url}`);
     console.error(`(Select an instance with CAIDO_URL or the stored default.)`);
   }
   process.exit(1);
@@ -205,8 +224,10 @@ export function loadConfig(): CaidoConfig {
 export const QUIET_LOGGER = {
   debug() {},
   info() {},
-  warn: (message: string, ...args: unknown[]) => console.error(message, ...args),
-  error: (message: string, ...args: unknown[]) => console.error(message, ...args),
+  warn: (message: string, ...args: unknown[]) =>
+    console.error(message, ...args),
+  error: (message: string, ...args: unknown[]) =>
+    console.error(message, ...args),
 };
 
 let _client: Client | null = null;
@@ -224,7 +245,9 @@ export async function getClient(): Promise<Client> {
   });
 
   try {
-    await _client.connect({ ready: { retries: 3, timeout: 5000, interval: 1000 } });
+    await _client.connect({
+      ready: { retries: 3, timeout: 5000, interval: 1000 },
+    });
   } catch (err: any) {
     if (err.message?.includes("not ready")) {
       console.error("Error: Caido instance is not ready. Is Caido running?");

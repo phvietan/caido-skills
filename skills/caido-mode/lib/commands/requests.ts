@@ -1,16 +1,37 @@
 /** HTTP History commands: search, recent, get, get-response, raw, export-curl */
 
 import { getClient, resolveProxy } from "../client";
-import { decodeRaw, formatHttpRaw, rawToCurl, splitRaw, CURL_MANAGED_HEADERS } from "../output";
+import {
+  decodeRaw,
+  formatHttpRaw,
+  rawToCurl,
+  splitRaw,
+  CURL_MANAGED_HEADERS,
+} from "../output";
 import type { OutputOpts } from "../types";
+import { tmpdir } from "node:os";
 
 /** Terse one-line-per-request rendering for fast, low-token browsing. */
-function compactLine(r: { id: string; method: string; host: string; path: string; query?: string; statusCode?: number }) {
+function compactLine(r: {
+  id: string;
+  method: string;
+  host: string;
+  path: string;
+  query?: string;
+  statusCode?: number;
+}) {
   const status = r.statusCode != null ? r.statusCode : "—";
   return `${r.id}\t${status}\t${r.method} ${r.host}${r.path}${r.query ? "?" + r.query : ""}`;
 }
 
-export async function cmdSearch(filter: string, limit: number, after?: string, idsOnly?: boolean, desc: boolean = true, compact?: boolean) {
+export async function cmdSearch(
+  filter: string,
+  limit: number,
+  after?: string,
+  idsOnly?: boolean,
+  desc: boolean = true,
+  compact?: boolean,
+) {
   const client = await getClient();
   let builder = client.request.list().filter(filter).first(limit);
   // The SDK's list() defaults to ASCENDING by id (oldest first), so .first(limit)
@@ -24,12 +45,12 @@ export async function cmdSearch(filter: string, limit: number, after?: string, i
   const connection = await builder;
 
   if (idsOnly) {
-    const ids = connection.edges.map(e => e.node.request.id);
+    const ids = connection.edges.map((e) => e.node.request.id);
     console.log(JSON.stringify(ids));
     return;
   }
 
-  const results = connection.edges.map(e => ({
+  const results = connection.edges.map((e) => ({
     id: e.node.request.id,
     method: e.node.request.method,
     host: e.node.request.host,
@@ -46,24 +67,33 @@ export async function cmdSearch(filter: string, limit: number, after?: string, i
 
   if (compact) {
     for (const r of results) console.log(compactLine(r));
-    console.log(`# ${results.length} result(s)${connection.pageInfo?.hasNextPage ? `, more available (--after ${connection.pageInfo.endCursor})` : ""}`);
+    console.log(
+      `# ${results.length} result(s)${connection.pageInfo?.hasNextPage ? `, more available (--after ${connection.pageInfo.endCursor})` : ""}`,
+    );
     return;
   }
 
-  console.log(JSON.stringify({
-    results,
-    pageInfo: connection.pageInfo,
-    count: results.length,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        results,
+        pageInfo: connection.pageInfo,
+        count: results.length,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdRecent(limit: number, compact?: boolean) {
   const client = await getClient();
-  const connection = await client.request.list()
+  const connection = await client.request
+    .list()
     .descending("req", "id")
     .first(limit);
 
-  const results = connection.edges.map(e => ({
+  const results = connection.edges.map((e) => ({
     id: e.node.request.id,
     method: e.node.request.method,
     host: e.node.request.host,
@@ -155,7 +185,10 @@ export async function cmdGetResponse(requestId: string, opts: OutputOpts) {
  * Writes raw bytes (no JSON wrapper) so it can be piped/redirected into a file
  * for inspection or to seed a request body.
  */
-export async function cmdRaw(requestId: string, opts: { out?: string; response?: boolean }) {
+export async function cmdRaw(
+  requestId: string,
+  opts: { out?: string; response?: boolean },
+) {
   const client = await getClient();
   const result = await client.request.get(requestId, { raw: true });
 
@@ -164,9 +197,13 @@ export async function cmdRaw(requestId: string, opts: { out?: string; response?:
     process.exit(1);
   }
 
-  const bytes: Uint8Array | undefined = opts.response ? result.response?.raw : result.request.raw;
+  const bytes: Uint8Array | undefined = opts.response
+    ? result.response?.raw
+    : result.request.raw;
   if (!bytes || bytes.length === 0) {
-    console.error(`No raw ${opts.response ? "response" : "request"} data for request ${requestId}`);
+    console.error(
+      `No raw ${opts.response ? "response" : "request"} data for request ${requestId}`,
+    );
     process.exit(1);
   }
 
@@ -195,7 +232,12 @@ export async function cmdExportCurl(requestId: string) {
     process.exit(1);
   }
 
-  const curl = rawToCurl(raw, result.request.host, result.request.port, result.request.isTls);
+  const curl = rawToCurl(
+    raw,
+    result.request.host,
+    result.request.port,
+    result.request.isTls,
+  );
   console.log(curl);
 }
 
@@ -210,7 +252,7 @@ const JAR_EXPIRY = 2147483647;
 
 interface AuthConfigResult {
   configText: string;
-  jarText?: string;       // only when a cookie jar is requested
+  jarText?: string; // only when a cookie jar is requested
   included: string[];
   cookieCount: number;
   cookieMode: "inline" | "jar" | "none";
@@ -233,13 +275,20 @@ function parseRawHeaders(raw: string): Array<{ name: string; value: string }> {
   const out: Array<{ name: string; value: string }> = [];
   for (const line of lines) {
     const i = line.indexOf(":");
-    if (i > 0) out.push({ name: line.slice(0, i).trim(), value: line.slice(i + 1).trim() });
+    if (i > 0)
+      out.push({
+        name: line.slice(0, i).trim(),
+        value: line.slice(i + 1).trim(),
+      });
   }
   return out;
 }
 
 /** Build a Netscape cookie jar (control-char-safe) from a Cookie header value. */
-function buildCookieJar(cookieValue: string, host: string): { text: string; count: number } {
+function buildCookieJar(
+  cookieValue: string,
+  host: string,
+): { text: string; count: number } {
   const jarLines = ["# Netscape HTTP Cookie File", "# generated by caido-mode"];
   let count = 0;
   for (const pair of cookieValue.split(";")) {
@@ -276,16 +325,22 @@ export function buildAuthConfig(
 ): AuthConfigResult {
   const headers = parseRawHeaders(raw);
   const scheme = isTls ? "https" : "http";
-  const portSuffix = (isTls && port === 443) || (!isTls && port === 80) ? "" : `:${port}`;
-  const urlHost = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+  const portSuffix =
+    (isTls && port === 443) || (!isTls && port === 80) ? "" : `:${port}`;
+  const urlHost =
+    host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
   const base = `${scheme}://${urlHost}${portSuffix}`;
   // Escape for a curl -K value and strip control chars so a value can't break the
   // `header = "..."` line or inject another directive.
-  const esc = (s: string) => s.replace(/[\r\n]/g, "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const esc = (s: string) =>
+    s
+      .replace(/[\r\n]/g, "")
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"');
   const exclude = new Set((opts.exclude ?? []).map((s) => s.toLowerCase()));
 
   const lines: string[] = [
-    `# curl config for ${base} — generated by caido-mode (INTERNAL testing only)`,
+    `# curl config for ${base} — generated by caido-client (INTERNAL testing only)`,
     `# Faithful static snapshot of one request's auth/identity headers.`,
     `# Refresh by regenerating from a fresh request; don't hand-edit cookies.`,
     `proxy = "${esc(proxy)}"`,
@@ -297,7 +352,10 @@ export function buildAuthConfig(
   let cookieValue: string | undefined;
   for (const h of headers) {
     const n = h.name.toLowerCase();
-    if (n === "cookie") { cookieValue = h.value; continue; }
+    if (n === "cookie") {
+      cookieValue = h.value;
+      continue;
+    }
     if (SKIP_HEADERS.has(n) || exclude.has(n)) continue;
     lines.push(`header = "${esc(h.name)}: ${esc(h.value)}"`);
     included.push(h.name);
@@ -311,17 +369,26 @@ export function buildAuthConfig(
       const jar = buildCookieJar(cookieValue, host);
       jarText = jar.text;
       cookieCount = jar.count;
-      lines.push(`cookie = "${esc(opts.cookieJar)}"`);      // read jar
-      lines.push(`cookie-jar = "${esc(opts.cookieJar)}"`);  // write jar (rotation capture — opt-in)
+      lines.push(`cookie = "${esc(opts.cookieJar)}"`); // read jar
+      lines.push(`cookie-jar = "${esc(opts.cookieJar)}"`); // write jar (rotation capture — opt-in)
       cookieMode = "jar";
     } else {
       lines.push(`header = "Cookie: ${esc(cookieValue)}"`); // static — nothing drifts
-      cookieCount = cookieValue.split(";").filter((p) => p.includes("=")).length;
+      cookieCount = cookieValue
+        .split(";")
+        .filter((p) => p.includes("=")).length;
       cookieMode = "inline";
     }
   }
 
-  return { configText: lines.join("\n") + "\n", jarText, included, cookieCount, cookieMode, base };
+  return {
+    configText: lines.join("\n") + "\n",
+    jarText,
+    included,
+    cookieCount,
+    cookieMode,
+    base,
+  };
 }
 
 export async function cmdExportCurlConfig(
@@ -346,7 +413,7 @@ export async function cmdExportCurlConfig(
 
   // Sanitize the host before using it as a path segment (no traversal/separators).
   const safeHost = host.replace(/[^a-zA-Z0-9._-]/g, "_") || "unknown";
-  const cfgPath = opts.out ?? `/tmp/caido/${safeHost}/auth.cfg`;
+  const cfgPath = opts.out ?? join(tmpdir(), "caido", safeHost, "auth.cfg");
   const dir = dirname(cfgPath);
   const jarPath = join(dir, "cookies.txt");
 
@@ -359,15 +426,21 @@ export async function cmdExportCurlConfig(
   writeFileSync(cfgPath, built.configText);
   if (built.jarText) writeFileSync(jarPath, built.jarText);
 
-  console.log(JSON.stringify({
-    config: cfgPath,
-    cookieMode: built.cookieMode,        // "inline" (static, default) | "jar" | "none"
-    ...(built.jarText ? { cookieJar: jarPath } : {}),
-    cookieCount: built.cookieCount,
-    capturedHeaders: built.included,
-    base: built.base,
-    proxy: resolveProxy(),
-    note: "Faithful static snapshot for INTERNAL testing. Cookies are inline+static (no drift); refresh by regenerating from a fresh request. For the user, always emit a FULL self-contained command via `export-curl`.",
-    usage: `curl -K ${cfgPath} "${built.base}/path"`,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        config: cfgPath,
+        cookieMode: built.cookieMode, // "inline" (static, default) | "jar" | "none"
+        ...(built.jarText ? { cookieJar: jarPath } : {}),
+        cookieCount: built.cookieCount,
+        capturedHeaders: built.included,
+        base: built.base,
+        proxy: resolveProxy(),
+        note: "Faithful static snapshot for INTERNAL testing. Cookies are inline+static (no drift); refresh by regenerating from a fresh request. For the user, always emit a FULL self-contained command via `export-curl`.",
+        usage: `curl -K ${cfgPath} "${built.base}/path"`,
+      },
+      null,
+      2,
+    ),
+  );
 }

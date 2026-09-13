@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env bun
 /**
  * Caido SDK Client v3.1
  * Clean multi-file CLI built entirely on @caido/sdk-client.
@@ -109,7 +109,7 @@ function printUsage() {
 Caido SDK Client v3.1 — Built on @caido/sdk-client
 
 Usage:
-  caido-client.ts <command> [options]
+  caido-client <command> [options]
 
 ═══════════════════════════════════════════════
  HTTP HISTORY & TESTING
@@ -133,7 +133,7 @@ Usage:
   raw <request-id>             Dump byte-exact raw request (no JSON wrapper)
     --out <file>               Write to a file instead of stdout
     --response                 Dump the raw response instead of the request
-                               → npx tsx caido-client.ts raw 123 --out /tmp/req.txt
+                               → caido-client raw 123 --out /tmp/req.txt
 
   replay <request-id>          Replay into a NEW named replay session (handoff)
     --name <name>              Session name (REQUIRED)
@@ -176,7 +176,7 @@ Usage:
     --config                   Instead, write a reusable curl -K config for INTERNAL
                                testing: a FAITHFUL STATIC snapshot of ALL the request's
                                auth/identity headers + static cookies, proxied via Caido
-    --out <file>               Config path (default: /tmp/caido/<host>/auth.cfg)
+    --out <file>               Config path (default: <OS temp>/caido/<host>/auth.cfg)
     --cookie-jar               Use a read/write cookie jar instead of static cookies
                                (follows Set-Cookie rotation; can drift — opt-in)
     --exclude <header>         Omit a header from the config (repeatable)
@@ -383,22 +383,22 @@ Usage:
     export CAIDO_PROXY=...      # only if the proxy listener differs from CAIDO_URL
 
 Primary testing workflow (curl, proxied through Caido — NOT replay):
-  npx tsx caido-client.ts search 'req.path.cont:"/api/user"' --recent --compact
-  npx tsx caido-client.ts export-curl 12345        # grab a base request as curl
+  caido-client search 'req.path.cont:"/api/user"' --recent --compact
+  caido-client export-curl 12345        # grab a base request as curl
   # then test with curl, always proxying through Caido so it lands in history:
   curl -x http://127.0.0.1:8080 -k 'https://target.com/api/user/999' -H 'Cookie: ...'
 
 Handoff to the user (named replay sessions in named collections):
-  npx tsx caido-client.ts create-collection "Vuln chain - IDOR to ATO"
-  npx tsx caido-client.ts create-session 12345 --name "1. login" --collection "Vuln chain - IDOR to ATO"
-  npx tsx caido-client.ts edit 12345 --path /api/admin --new-name "2. priv-esc" --session "1. login"
-  npx tsx caido-client.ts edit-session "2. priv-esc" --body '{"role":"admin"}' --nonach --compact
+  caido-client create-collection "Vuln chain - IDOR to ATO"
+  caido-client create-session 12345 --name "1. login" --collection "Vuln chain - IDOR to ATO"
+  caido-client edit 12345 --path /api/admin --new-name "2. priv-esc" --session "1. login"
+  caido-client edit-session "2. priv-esc" --body '{"role":"admin"}' --nonach --compact
 
 Other:
-  npx tsx caido-client.ts create-finding 12345 --title "IDOR" --reporter "rez0"
-  npx tsx caido-client.ts create-scope "Target" --allow "*.example.com"
-  npx tsx caido-client.ts sessions --limit 10
-  npx tsx caido-client.ts health
+  caido-client create-finding 12345 --title "IDOR" --reporter "rez0"
+  caido-client create-scope "Target" --allow "*.example.com"
+  caido-client sessions --limit 10
+  caido-client health
 `);
 }
 
@@ -899,7 +899,7 @@ async function main() {
     case "setup": {
       const pat = args[1];
       if (!pat) {
-        console.error("Usage: npx tsx caido-client.ts setup <pat> [url] [--proxy <addr>]");
+        console.error("Usage: caido-client setup <pat> [url] [--proxy <addr>]");
         console.error("\nGet a PAT from: Caido → Settings → Developer → Personal Access Tokens");
         process.exit(1);
       }

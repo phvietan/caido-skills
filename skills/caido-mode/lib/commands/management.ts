@@ -10,7 +10,11 @@ export async function cmdScopes() {
   console.log(JSON.stringify(scopes, null, 2));
 }
 
-export async function cmdCreateScope(name: string, allow: string[], deny: string[]) {
+export async function cmdCreateScope(
+  name: string,
+  allow: string[],
+  deny: string[],
+) {
   const client = await getClient();
   const scope = await client.scope.create({
     name,
@@ -56,7 +60,11 @@ export async function cmdFilters() {
   console.log(JSON.stringify(filters, null, 2));
 }
 
-export async function cmdCreateFilter(name: string, query: string, alias?: string) {
+export async function cmdCreateFilter(
+  name: string,
+  query: string,
+  alias?: string,
+) {
   const client = await getClient();
   const filter = await client.filter.create({
     name,
@@ -126,14 +134,25 @@ export async function cmdEnvSet(envId: string, varName: string, value: string) {
   }
 
   // Check if variable exists
-  const existing = env.variables.find(v => v.name === varName);
+  const existing = env.variables.find((v) => v.name === varName);
   if (existing) {
     await env.updateVariable(varName, { value });
   } else {
     await env.addVariable({ name: varName, value, kind: "PLAIN" });
   }
 
-  console.log(JSON.stringify({ envId, variable: varName, value, action: existing ? "updated" : "created" }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        envId,
+        variable: varName,
+        value,
+        action: existing ? "updated" : "created",
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdDeleteEnv(envId: string) {

@@ -29,8 +29,15 @@ import {
 // ── Section / operation specification ──
 
 type MatcherKind = "raw" | "name" | "none";
-interface OpSpec { opField: string; matcher: MatcherKind; replacer: boolean; }
-interface SectionSpec { field: string; ops: Record<string, OpSpec>; }
+interface OpSpec {
+  opField: string;
+  matcher: MatcherKind;
+  replacer: boolean;
+}
+interface SectionSpec {
+  field: string;
+  ops: Record<string, OpSpec>;
+}
 
 // raw op = matcher(value|regex|full) + replacer; name op (header/query update/add) = matcher{name} + replacer;
 // remove = matcher{name} only; method/status update + sni raw = replacer only (no matcher).
@@ -44,17 +51,26 @@ const HEADER_QUERY_OPS: Record<string, OpSpec> = {
 
 export const SECTIONS: Record<string, SectionSpec> = {
   // ── request ──
-  "req-method": { field: "requestMethod", ops: { update: { opField: "update", matcher: "none", replacer: true } } },
+  "req-method": {
+    field: "requestMethod",
+    ops: { update: { opField: "update", matcher: "none", replacer: true } },
+  },
   "req-path": { field: "requestPath", ops: { raw: RAW } },
   "req-query": { field: "requestQuery", ops: HEADER_QUERY_OPS },
   "req-body": { field: "requestBody", ops: { raw: RAW } },
   "req-first-line": { field: "requestFirstLine", ops: { raw: RAW } },
   "req-header": { field: "requestHeader", ops: HEADER_QUERY_OPS },
   "req-all": { field: "requestAll", ops: { raw: RAW } },
-  "req-sni": { field: "requestSNI", ops: { raw: { opField: "raw", matcher: "none", replacer: true } } },
+  "req-sni": {
+    field: "requestSNI",
+    ops: { raw: { opField: "raw", matcher: "none", replacer: true } },
+  },
   // ── response ──
   "resp-body": { field: "responseBody", ops: { raw: RAW } },
-  "resp-status": { field: "responseStatusCode", ops: { update: { opField: "update", matcher: "none", replacer: true } } },
+  "resp-status": {
+    field: "responseStatusCode",
+    ops: { update: { opField: "update", matcher: "none", replacer: true } },
+  },
   "resp-first-line": { field: "responseFirstLine", ops: { raw: RAW } },
   "resp-header": { field: "responseHeader", ops: HEADER_QUERY_OPS },
   "resp-all": { field: "responseAll", ops: { raw: RAW } },
@@ -63,7 +79,15 @@ export const SECTIONS: Record<string, SectionSpec> = {
   "ws-down": { field: "streamWsMessageDownstream", ops: { raw: RAW } },
 };
 
-const SOURCES = ["AUTOMATE", "INTERCEPT", "REPLAY", "WORKFLOW", "SAMPLE", "PLUGIN", "IMPORT"];
+const SOURCES = [
+  "AUTOMATE",
+  "INTERCEPT",
+  "REPLAY",
+  "WORKFLOW",
+  "SAMPLE",
+  "PLUGIN",
+  "IMPORT",
+];
 
 export interface MrRuleOpts {
   section: string;
@@ -92,28 +116,52 @@ export function listSections(): string {
 /** Build the TamperSectionInput from CLI options. Throws Error on any invalid combination. */
 export function buildTamperSection(o: MrRuleOpts): any {
   const spec = SECTIONS[o.section];
-  if (!spec) throw new Error(`Unknown --section "${o.section}".\nValid: ${listSections()}`);
+  if (!spec)
+    throw new Error(
+      `Unknown --section "${o.section}".\nValid: ${listSections()}`,
+    );
 
   const opKey = o.operation ?? defaultOp(spec);
   const op = spec.ops[opKey];
-  if (!op) throw new Error(`--operation "${opKey}" is not valid for section "${o.section}". Valid: ${Object.keys(spec.ops).join(", ")}`);
+  if (!op)
+    throw new Error(
+      `--operation "${opKey}" is not valid for section "${o.section}". Valid: ${Object.keys(spec.ops).join(", ")}`,
+    );
 
   const opPayload: any = {};
 
   // Matcher
   if (op.matcher === "raw") {
-    const picked = [o.matchValue != null, o.matchRegex != null, !!o.matchFull].filter(Boolean).length;
+    const picked = [
+      o.matchValue != null,
+      o.matchRegex != null,
+      !!o.matchFull,
+    ].filter(Boolean).length;
     if (picked !== 1) {
-      throw new Error(`section "${o.section}" / "${opKey}" needs exactly one matcher: --match-value <str> | --match-regex <re> | --match-full`);
+      throw new Error(
+        `section "${o.section}" / "${opKey}" needs exactly one matcher: --match-value <str> | --match-regex <re> | --match-full`,
+      );
     }
-    if (o.matchValue != null) opPayload.matcher = { value: { value: o.matchValue } };
-    else if (o.matchRegex != null) opPayload.matcher = { regex: { regex: o.matchRegex } };
+    if (o.matchValue != null)
+      opPayload.matcher = { value: { value: o.matchValue } };
+    else if (o.matchRegex != null)
+      opPayload.matcher = { regex: { regex: o.matchRegex } };
     else opPayload.matcher = { full: { full: true } };
   } else if (op.matcher === "name") {
-    if (!o.matchName) throw new Error(`section "${o.section}" / "${opKey}" needs --match-name <header/param name>`);
+    if (!o.matchName)
+      throw new Error(
+        `section "${o.section}" / "${opKey}" needs --match-name <header/param name>`,
+      );
     opPayload.matcher = { name: o.matchName };
-  } else if (o.matchValue != null || o.matchRegex != null || o.matchFull || o.matchName != null) {
-    throw new Error(`section "${o.section}" / "${opKey}" takes no matcher (it targets the whole section)`);
+  } else if (
+    o.matchValue != null ||
+    o.matchRegex != null ||
+    o.matchFull ||
+    o.matchName != null
+  ) {
+    throw new Error(
+      `section "${o.section}" / "${opKey}" takes no matcher (it targets the whole section)`,
+    );
   }
 
   // Replacer
@@ -121,11 +169,17 @@ export function buildTamperSection(o: MrRuleOpts): any {
     const hasTerm = o.replace != null;
     const hasWf = !!o.workflowId;
     if (hasTerm === hasWf) {
-      throw new Error(`section "${o.section}" / "${opKey}" needs exactly one replacer: --replace <term> | --workflow <id>`);
+      throw new Error(
+        `section "${o.section}" / "${opKey}" needs exactly one replacer: --replace <term> | --workflow <id>`,
+      );
     }
-    opPayload.replacer = hasTerm ? { term: { term: o.replace } } : { workflow: { id: o.workflowId } };
+    opPayload.replacer = hasTerm
+      ? { term: { term: o.replace } }
+      : { workflow: { id: o.workflowId } };
   } else if (o.replace != null || o.workflowId) {
-    throw new Error(`section "${o.section}" / "${opKey}" takes no replacer (a remove operation only matches)`);
+    throw new Error(
+      `section "${o.section}" / "${opKey}" takes no replacer (a remove operation only matches)`,
+    );
   }
 
   return { [spec.field]: { operation: { [op.opField]: opPayload } } };
@@ -135,7 +189,8 @@ function normalizeSources(sources?: string[]): string[] | undefined {
   if (!sources || !sources.length) return undefined;
   return sources.map((s) => {
     const up = s.trim().toUpperCase();
-    if (!SOURCES.includes(up)) throw new Error(`Unknown source "${s}". Valid: ${SOURCES.join(", ")}`);
+    if (!SOURCES.includes(up))
+      throw new Error(`Unknown source "${s}". Valid: ${SOURCES.join(", ")}`);
     return up;
   });
 }
@@ -158,7 +213,10 @@ export function buildRuleInput(o: MrRuleOpts, collectionId?: string): any {
 
 // ── Collection resolution ──
 
-async function resolveTamperCollectionId(client: any, idOrName: string): Promise<string | undefined> {
+async function resolveTamperCollectionId(
+  client: any,
+  idOrName: string,
+): Promise<string | undefined> {
   const r: any = await client.graphql.query(TAMPER_RULE_COLLECTIONS, {});
   for (const c of r.tamperRuleCollections) {
     if (c.id === idOrName || c.name === idOrName) return c.id;
@@ -166,12 +224,17 @@ async function resolveTamperCollectionId(client: any, idOrName: string): Promise
   return undefined;
 }
 
-async function requireTamperCollection(client: any, ref: string): Promise<string> {
+async function requireTamperCollection(
+  client: any,
+  ref: string,
+): Promise<string> {
   const id = await resolveTamperCollectionId(client, ref);
   if (!id) {
     console.error(`M&R collection "${ref}" not found.`);
-    console.error(`List:    npx tsx caido-client.ts mr-collections`);
-    console.error(`Create:  npx tsx caido-client.ts create-mr-collection "${ref}"`);
+    console.error(`List:    caido-client mr-collections`);
+    console.error(
+      `Create:  caido-client create-mr-collection "${ref}"`,
+    );
     process.exit(1);
   }
   return id;
@@ -182,7 +245,9 @@ async function defaultTamperCollectionId(client: any): Promise<string> {
   const r: any = await client.graphql.query(TAMPER_RULE_COLLECTIONS, {});
   const cols = r.tamperRuleCollections;
   if (!cols.length) {
-    console.error('No M&R collections exist. Create one: create-mr-collection "<name>"');
+    console.error(
+      'No M&R collections exist. Create one: create-mr-collection "<name>"',
+    );
     process.exit(1);
   }
   const def = cols.find((c: any) => /^default/i.test(c.name)) ?? cols[0];
@@ -190,11 +255,17 @@ async function defaultTamperCollectionId(client: any): Promise<string> {
 }
 
 const b64 = (s: string) => Buffer.from(s, "utf-8").toString("base64");
-const unb64 = (s: string | undefined | null) => (s ? Buffer.from(s, "base64").toString("utf-8") : "");
+const unb64 = (s: string | undefined | null) =>
+  s ? Buffer.from(s, "base64").toString("utf-8") : "";
 const isEnabled = (rule: any) => rule?.enable != null;
 
 function fmtRule(rule: any) {
-  return { id: rule.id, name: rule.name, enabled: isEnabled(rule), collection: rule.collection?.name };
+  return {
+    id: rule.id,
+    name: rule.name,
+    enabled: isEnabled(rule),
+    collection: rule.collection?.name,
+  };
 }
 
 // ── Commands ──
@@ -205,7 +276,12 @@ export async function cmdMrRules() {
   const rules: any[] = [];
   for (const c of r.tamperRuleCollections) {
     for (const rule of c.rules || []) {
-      rules.push({ id: rule.id, name: rule.name, enabled: isEnabled(rule), collection: c.name });
+      rules.push({
+        id: rule.id,
+        name: rule.name,
+        enabled: isEnabled(rule),
+        collection: c.name,
+      });
     }
   }
   console.log(JSON.stringify({ rules, count: rules.length }, null, 2));
@@ -214,7 +290,11 @@ export async function cmdMrRules() {
 export async function cmdMrCollections() {
   const client = await getClient();
   const r: any = await client.graphql.query(TAMPER_RULE_COLLECTIONS, {});
-  const results = r.tamperRuleCollections.map((c: any) => ({ id: c.id, name: c.name, ruleCount: (c.rules || []).length }));
+  const results = r.tamperRuleCollections.map((c: any) => ({
+    id: c.id,
+    name: c.name,
+    ruleCount: (c.rules || []).length,
+  }));
   console.log(JSON.stringify({ results, count: results.length }, null, 2));
 }
 
@@ -231,56 +311,94 @@ export async function cmdCreateMrRule(o: MrRuleOpts, collectionRef?: string) {
     console.error(`Caido rejected the rule: ${payload.error.__typename}`);
     process.exit(1);
   }
-  console.log(JSON.stringify({ created: fmtRule(payload.rule), section: input.section }, null, 2));
+  console.log(
+    JSON.stringify(
+      { created: fmtRule(payload.rule), section: input.section },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdUpdateMrRule(id: string, o: MrRuleOpts) {
   const client = await getClient();
   const input = buildRuleInput(o); // no collectionId in UpdateTamperRuleInput
-  const r: any = await client.graphql.mutation(UPDATE_TAMPER_RULE, { id, input });
+  const r: any = await client.graphql.mutation(UPDATE_TAMPER_RULE, {
+    id,
+    input,
+  });
   const payload = r.updateTamperRule;
   if (payload.error) {
     console.error(`Caido rejected the update: ${payload.error.__typename}`);
     process.exit(1);
   }
-  console.log(JSON.stringify({ updated: fmtRule(payload.rule), section: input.section }, null, 2));
+  console.log(
+    JSON.stringify(
+      { updated: fmtRule(payload.rule), section: input.section },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdDeleteMrRule(id: string) {
   const client = await getClient();
   const r: any = await client.graphql.mutation(DELETE_TAMPER_RULE, { id });
-  console.log(JSON.stringify({ deleted: r.deleteTamperRule.deletedId }, null, 2));
+  console.log(
+    JSON.stringify({ deleted: r.deleteTamperRule.deletedId }, null, 2),
+  );
 }
 
 export async function cmdToggleMrRule(id: string, enabled: boolean) {
   const client = await getClient();
-  const r: any = await client.graphql.mutation(TOGGLE_TAMPER_RULE, { id, enabled });
+  const r: any = await client.graphql.mutation(TOGGLE_TAMPER_RULE, {
+    id,
+    enabled,
+  });
   const payload = r.toggleTamperRule;
   if (payload.error) {
     console.error(`Caido rejected the toggle: ${payload.error.__typename}`);
     process.exit(1);
   }
-  console.log(JSON.stringify({ rule: fmtRule(payload.rule), enabled: isEnabled(payload.rule) }, null, 2));
+  console.log(
+    JSON.stringify(
+      { rule: fmtRule(payload.rule), enabled: isEnabled(payload.rule) },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdRenameMrRule(id: string, name: string) {
   const client = await getClient();
-  const r: any = await client.graphql.mutation(RENAME_TAMPER_RULE, { id, name });
-  console.log(JSON.stringify({ renamed: fmtRule(r.renameTamperRule.rule) }, null, 2));
+  const r: any = await client.graphql.mutation(RENAME_TAMPER_RULE, {
+    id,
+    name,
+  });
+  console.log(
+    JSON.stringify({ renamed: fmtRule(r.renameTamperRule.rule) }, null, 2),
+  );
 }
 
 export async function cmdMoveMrRule(id: string, collectionRef: string) {
   const client = await getClient();
   const collectionId = await requireTamperCollection(client, collectionRef);
-  const r: any = await client.graphql.mutation(MOVE_TAMPER_RULE, { id, collectionId });
-  console.log(JSON.stringify({ moved: fmtRule(r.moveTamperRule.rule) }, null, 2));
+  const r: any = await client.graphql.mutation(MOVE_TAMPER_RULE, {
+    id,
+    collectionId,
+  });
+  console.log(
+    JSON.stringify({ moved: fmtRule(r.moveTamperRule.rule) }, null, 2),
+  );
 }
 
 export async function cmdTestMrRule(o: MrRuleOpts, raw: string) {
   const client = await getClient();
   const section = buildTamperSection(o);
   const resolved = ensureHeaderCrlf(await resolveRaw(raw));
-  const r: any = await client.graphql.mutation(TEST_TAMPER_RULE, { input: { raw: b64(resolved), section } });
+  const r: any = await client.graphql.mutation(TEST_TAMPER_RULE, {
+    input: { raw: b64(resolved), section },
+  });
   const payload = r.testTamperRule;
   if (payload.error) {
     console.error(`Rule could not be applied: ${payload.error.__typename}`);
@@ -291,20 +409,39 @@ export async function cmdTestMrRule(o: MrRuleOpts, raw: string) {
 
 export async function cmdCreateMrCollection(name: string) {
   const client = await getClient();
-  const r: any = await client.graphql.mutation(CREATE_TAMPER_RULE_COLLECTION, { input: { name } });
+  const r: any = await client.graphql.mutation(CREATE_TAMPER_RULE_COLLECTION, {
+    input: { name },
+  });
   console.log(JSON.stringify(r.createTamperRuleCollection.collection, null, 2));
 }
 
 export async function cmdRenameMrCollection(ref: string, name: string) {
   const client = await getClient();
   const id = await requireTamperCollection(client, ref);
-  const r: any = await client.graphql.mutation(RENAME_TAMPER_RULE_COLLECTION, { id, name });
-  console.log(JSON.stringify({ renamed: r.renameTamperRuleCollection.collection }, null, 2));
+  const r: any = await client.graphql.mutation(RENAME_TAMPER_RULE_COLLECTION, {
+    id,
+    name,
+  });
+  console.log(
+    JSON.stringify(
+      { renamed: r.renameTamperRuleCollection.collection },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdDeleteMrCollection(ref: string) {
   const client = await getClient();
   const id = await requireTamperCollection(client, ref);
-  const r: any = await client.graphql.mutation(DELETE_TAMPER_RULE_COLLECTION, { id });
-  console.log(JSON.stringify({ deleted: r.deleteTamperRuleCollection.deletedId }, null, 2));
+  const r: any = await client.graphql.mutation(DELETE_TAMPER_RULE_COLLECTION, {
+    id,
+  });
+  console.log(
+    JSON.stringify(
+      { deleted: r.deleteTamperRuleCollection.deletedId },
+      null,
+      2,
+    ),
+  );
 }

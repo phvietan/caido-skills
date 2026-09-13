@@ -34,7 +34,12 @@ export interface RawEdits {
   replacements: string[];
 }
 
-function buildConnection(host: string, port: number, isTLS: boolean, overrides?: ConnectionOverrides): ConnectionInfoInput {
+function buildConnection(
+  host: string,
+  port: number,
+  isTLS: boolean,
+  overrides?: ConnectionOverrides,
+): ConnectionInfoInput {
   const connection: ConnectionInfoInput = {
     host: overrides?.connectHost ?? host,
     port: overrides?.connectPort ?? port,
@@ -68,11 +73,16 @@ export function normalizeRaw(raw: string): string {
   if (raw.includes("\r\n")) return raw;
   return raw.replace(/\\([rnt\\])/g, (_, ch) => {
     switch (ch) {
-      case "r": return "\r";
-      case "n": return "\n";
-      case "t": return "\t";
-      case "\\": return "\\";
-      default: return ch;
+      case "r":
+        return "\r";
+      case "n":
+        return "\n";
+      case "t":
+        return "\t";
+      case "\\":
+        return "\\";
+      default:
+        return ch;
     }
   });
 }
@@ -102,7 +112,14 @@ export function applyRawEdits(raw: string, edits: RawEdits): string {
   // so a body that contains \r\n\r\n (e.g. multipart) can't be mistaken for the split.
   const { headerBlock, body: splitBody, sep } = splitRaw(raw);
   let bodyPart = splitBody ?? "";
-  const lineEnd = sep === "\r\n\r\n" ? "\r\n" : sep === "\n\n" ? "\n" : (raw.includes("\r\n") ? "\r\n" : "\n");
+  const lineEnd =
+    sep === "\r\n\r\n"
+      ? "\r\n"
+      : sep === "\n\n"
+        ? "\n"
+        : raw.includes("\r\n")
+          ? "\r\n"
+          : "\n";
   let hasBody = sep !== undefined;
 
   const headerLines = headerBlock.split(lineEnd);
@@ -111,26 +128,34 @@ export function applyRawEdits(raw: string, edits: RawEdits): string {
 
   if (edits.method) {
     const spaceIdx = requestLine.indexOf(" ");
-    if (spaceIdx > 0) requestLine = edits.method + requestLine.substring(spaceIdx);
+    if (spaceIdx > 0)
+      requestLine = edits.method + requestLine.substring(spaceIdx);
   }
 
   if (edits.path) {
     const firstSpace = requestLine.indexOf(" ");
     const lastSpace = requestLine.lastIndexOf(" ");
     if (firstSpace > 0 && lastSpace > firstSpace) {
-      requestLine = requestLine.substring(0, firstSpace + 1) + edits.path + requestLine.substring(lastSpace);
+      requestLine =
+        requestLine.substring(0, firstSpace + 1) +
+        edits.path +
+        requestLine.substring(lastSpace);
     }
   }
 
   for (const name of edits.removeHeaders) {
-    headers = headers.filter(h => !h.toLowerCase().startsWith(name.toLowerCase() + ":"));
+    headers = headers.filter(
+      (h) => !h.toLowerCase().startsWith(name.toLowerCase() + ":"),
+    );
   }
 
   for (const header of edits.setHeaders) {
     const colonIdx = header.indexOf(":");
     if (colonIdx > 0) {
       const name = header.substring(0, colonIdx).trim();
-      headers = headers.filter(h => !h.toLowerCase().startsWith(name.toLowerCase() + ":"));
+      headers = headers.filter(
+        (h) => !h.toLowerCase().startsWith(name.toLowerCase() + ":"),
+      );
       headers.push(header.trim());
     }
   }
@@ -138,7 +163,9 @@ export function applyRawEdits(raw: string, edits: RawEdits): string {
   if (edits.body !== undefined) {
     bodyPart = edits.body;
     const clBytes = new TextEncoder().encode(bodyPart).length;
-    headers = headers.filter(h => !h.toLowerCase().startsWith("content-length:"));
+    headers = headers.filter(
+      (h) => !h.toLowerCase().startsWith("content-length:"),
+    );
     headers.push(`Content-Length: ${clBytes}`);
     hasBody = true;
   }
@@ -178,7 +205,10 @@ async function resolveSession(client: any, idOrName: string) {
  * undefined if no collection matches (callers should error and tell the user to
  * create it explicitly — collection names are mandatory and never auto-created).
  */
-async function resolveCollectionId(client: any, idOrName: string): Promise<string | undefined> {
+async function resolveCollectionId(
+  client: any,
+  idOrName: string,
+): Promise<string | undefined> {
   let after: string | undefined;
   while (true) {
     const page = after
@@ -186,7 +216,8 @@ async function resolveCollectionId(client: any, idOrName: string): Promise<strin
       : await client.replay.collections.list().first(100);
 
     for (const edge of page.edges) {
-      if (edge.node.id === idOrName || edge.node.name === idOrName) return edge.node.id;
+      if (edge.node.id === idOrName || edge.node.name === idOrName)
+        return edge.node.id;
     }
 
     if (!page.pageInfo.hasNextPage) break;
@@ -196,20 +227,30 @@ async function resolveCollectionId(client: any, idOrName: string): Promise<strin
 }
 
 /** Resolve a --collection ref to an id, exiting with guidance if it doesn't exist. */
-async function requireCollection(client: any, ref: string | undefined): Promise<string | undefined> {
+async function requireCollection(
+  client: any,
+  ref: string | undefined,
+): Promise<string | undefined> {
   if (!ref) return undefined;
   const id = await resolveCollectionId(client, ref);
   if (!id) {
     console.error(`Collection "${ref}" not found.`);
-    console.error(`List collections:  npx tsx caido-client.ts collections`);
-    console.error(`Create it (name is mandatory):  npx tsx caido-client.ts create-collection "${ref}"`);
+    console.error(`List collections:  caido-client collections`);
+    console.error(
+      `Create it (name is mandatory):  caido-client create-collection "${ref}"`,
+    );
     process.exit(1);
   }
   return id;
 }
 
 /** Apply a NameChange to a just-touched session, returning the effective name. */
-async function applyNameChange(client: any, sessionId: string, current: string | undefined, change: NameChange): Promise<string | undefined> {
+async function applyNameChange(
+  client: any,
+  sessionId: string,
+  current: string | undefined,
+  change: NameChange,
+): Promise<string | undefined> {
   if (change.kind === "rename") {
     await client.replay.sessions.rename(sessionId, change.name);
     return change.name;
@@ -217,7 +258,12 @@ async function applyNameChange(client: any, sessionId: string, current: string |
   return current;
 }
 
-function buildReplayOutput(sessionId: string, result: any, opts: OutputOpts, modifiedRaw?: string) {
+function buildReplayOutput(
+  sessionId: string,
+  result: any,
+  opts: OutputOpts,
+  modifiedRaw?: string,
+) {
   const output: Record<string, any> = {
     sessionId,
     status: result.status,
@@ -238,7 +284,10 @@ function buildReplayOutput(sessionId: string, result: any, opts: OutputOpts, mod
         length: result.entry.response.length,
       };
       if (result.entry.response.raw) {
-        output.response.raw = formatHttpRaw(decodeRaw(result.entry.response.raw), opts);
+        output.response.raw = formatHttpRaw(
+          decodeRaw(result.entry.response.raw),
+          opts,
+        );
       }
     }
   }
@@ -265,7 +314,10 @@ async function createRawReplaySession(
   };
   if (collectionId) input.collectionId = collectionId;
 
-  const createResult = await client.graphql.mutation(CREATE_REPLAY_SESSION_RAW, { input });
+  const createResult = await client.graphql.mutation(
+    CREATE_REPLAY_SESSION_RAW,
+    { input },
+  );
   return (createResult as any).createReplaySession.session;
 }
 
@@ -292,7 +344,9 @@ export async function cmdReplay(
   const session = await client.replay.sessions.create(createOpts);
   await client.replay.sessions.rename(session.id, name);
 
-  let raw = rawOverride ? await resolveRaw(rawOverride) : decodeRaw(original.request.raw);
+  let raw = rawOverride
+    ? await resolveRaw(rawOverride)
+    : decodeRaw(original.request.raw);
   if (!raw) {
     console.error("No raw data for this request");
     process.exit(1);
@@ -308,7 +362,13 @@ export async function cmdReplay(
   );
 
   const result = await client.replay.send(session.id, { raw, connection });
-  console.log(JSON.stringify({ sessionName: name, ...buildReplayOutput(session.id, result, opts) }, null, 2));
+  console.log(
+    JSON.stringify(
+      { sessionName: name, ...buildReplayOutput(session.id, result, opts) },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdSendRaw(
@@ -327,11 +387,22 @@ export async function cmdSendRaw(
 
   const collectionId = await requireCollection(client, collectionRef);
   const connection = buildConnection(host, port, tls, overrides);
-  const session = await createRawReplaySession(client, raw, connection, collectionId);
+  const session = await createRawReplaySession(
+    client,
+    raw,
+    connection,
+    collectionId,
+  );
   await client.replay.sessions.rename(session.id, name);
 
   const result = await client.replay.send(session.id, { raw, connection });
-  console.log(JSON.stringify({ sessionName: name, ...buildReplayOutput(session.id, result, opts) }, null, 2));
+  console.log(
+    JSON.stringify(
+      { sessionName: name, ...buildReplayOutput(session.id, result, opts) },
+      null,
+      2,
+    ),
+  );
 }
 
 // -- Edit --
@@ -380,7 +451,12 @@ export async function cmdEdit(
       process.exit(1);
     }
     sessionId = session.id;
-    sessionName = await applyNameChange(client, session.id, session.name, target.nameChange);
+    sessionName = await applyNameChange(
+      client,
+      session.id,
+      session.name,
+      target.nameChange,
+    );
   }
 
   const connection = buildConnection(
@@ -390,8 +466,20 @@ export async function cmdEdit(
     overrides,
   );
 
-  const result = await client.replay.send(sessionId, { raw: modifiedRaw, connection });
-  console.log(JSON.stringify({ sessionName, ...buildReplayOutput(sessionId, result, opts, modifiedRaw) }, null, 2));
+  const result = await client.replay.send(sessionId, {
+    raw: modifiedRaw,
+    connection,
+  });
+  console.log(
+    JSON.stringify(
+      {
+        sessionName,
+        ...buildReplayOutput(sessionId, result, opts, modifiedRaw),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdGetSession(sessionIdOrName: string, opts: OutputOpts) {
@@ -430,19 +518,30 @@ export async function cmdReplayEntries(
     process.exit(1);
   }
 
-  const connection = await session.entries()
-    .includeRaw(includeRaw ? { request: true, response: true, replay: true } : false)
+  const connection = await session
+    .entries()
+    .includeRaw(
+      includeRaw ? { request: true, response: true, replay: true } : false,
+    )
     .first(limit);
 
-  const results = connection.edges.map((e: any) => formatReplayEntry(e.node, opts, includeRaw));
+  const results = connection.edges.map((e: any) =>
+    formatReplayEntry(e.node, opts, includeRaw),
+  );
 
-  console.log(JSON.stringify({
-    sessionId: session.id,
-    sessionName: session.name,
-    activeEntryId: session.activeEntryId,
-    results,
-    count: results.length,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        sessionId: session.id,
+        sessionName: session.name,
+        activeEntryId: session.activeEntryId,
+        results,
+        count: results.length,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdEditSession(
@@ -466,7 +565,9 @@ export async function cmdEditSession(
 
   const entry = await client.replay.entries.get(session.activeEntryId);
   if (!entry?.raw) {
-    console.error(`Could not get raw data for active entry ${session.activeEntryId}`);
+    console.error(
+      `Could not get raw data for active entry ${session.activeEntryId}`,
+    );
     process.exit(1);
   }
 
@@ -484,9 +585,26 @@ export async function cmdEditSession(
     overrides,
   );
 
-  const result = await client.replay.send(session.id, { raw: modifiedRaw, connection });
-  const sessionName = await applyNameChange(client, session.id, session.name, nameChange);
-  console.log(JSON.stringify({ sessionName, ...buildReplayOutput(session.id, result, opts, modifiedRaw) }, null, 2));
+  const result = await client.replay.send(session.id, {
+    raw: modifiedRaw,
+    connection,
+  });
+  const sessionName = await applyNameChange(
+    client,
+    session.id,
+    session.name,
+    nameChange,
+  );
+  console.log(
+    JSON.stringify(
+      {
+        sessionName,
+        ...buildReplayOutput(session.id, result, opts, modifiedRaw),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 function formatReplayEntry(entry: any, opts: OutputOpts, includeRaw: boolean) {
@@ -495,12 +613,14 @@ function formatReplayEntry(entry: any, opts: OutputOpts, includeRaw: boolean) {
     sessionId: entry.sessionId,
     createdAt: entry.createdAt,
     error: entry.error,
-    connection: entry.connection ? {
-      host: entry.connection.host,
-      port: entry.connection.port,
-      isTLS: entry.connection.isTLS,
-      ...(entry.connection.SNI ? { SNI: entry.connection.SNI } : {}),
-    } : undefined,
+    connection: entry.connection
+      ? {
+          host: entry.connection.host,
+          port: entry.connection.port,
+          isTLS: entry.connection.isTLS,
+          ...(entry.connection.SNI ? { SNI: entry.connection.SNI } : {}),
+        }
+      : undefined,
   };
 
   if (entry.request) {
@@ -525,8 +645,10 @@ function formatReplayEntry(entry: any, opts: OutputOpts, includeRaw: boolean) {
 
   if (includeRaw) {
     if (entry.raw) output.raw = formatHttpRaw(decodeRaw(entry.raw), opts);
-    if (entry.request?.raw) output.request.raw = formatHttpRaw(decodeRaw(entry.request.raw), opts);
-    if (entry.response?.raw) output.response.raw = formatHttpRaw(decodeRaw(entry.response.raw), opts);
+    if (entry.request?.raw)
+      output.request.raw = formatHttpRaw(decodeRaw(entry.request.raw), opts);
+    if (entry.response?.raw)
+      output.response.raw = formatHttpRaw(decodeRaw(entry.response.raw), opts);
   }
 
   return output;
@@ -535,7 +657,10 @@ function formatReplayEntry(entry: any, opts: OutputOpts, includeRaw: boolean) {
 // -- Pagination helper --
 
 async function paginateSdkList<T>(
-  fetchPage: (after: string | undefined, want: number) => Promise<{
+  fetchPage: (
+    after: string | undefined,
+    want: number,
+  ) => Promise<{
     edges: Array<{ node: T }>;
     pageInfo: { hasNextPage: boolean; endCursor?: string | null };
   }>,
@@ -551,7 +676,10 @@ async function paginateSdkList<T>(
     const page = await fetchPage(after, want);
     for (const e of page.edges) results.push(mapNode(e.node));
     if (!page.pageInfo.hasNextPage) break;
-    if (results.length >= cap) { truncated = true; break; }
+    if (results.length >= cap) {
+      truncated = true;
+      break;
+    }
     after = page.pageInfo.endCursor ?? undefined;
   }
   return { results, truncated };
@@ -564,16 +692,36 @@ export async function cmdReplaySessions(limit?: number) {
   // Sessions can't be sorted (SDK exposes no order field), so a single page can hide
   // recently-created sessions on later pages. Paginate fully (capped) by default.
   const { results, truncated } = await paginateSdkList(
-    (after, want) => after
-      ? client.replay.sessions.list().after(after).first(want)
-      : client.replay.sessions.list().first(want),
-    (n: any) => ({ id: n.id, name: n.name, collectionId: n.collectionId, activeEntryId: n.activeEntryId }),
+    (after, want) =>
+      after
+        ? client.replay.sessions.list().after(after).first(want)
+        : client.replay.sessions.list().first(want),
+    (n: any) => ({
+      id: n.id,
+      name: n.name,
+      collectionId: n.collectionId,
+      activeEntryId: n.activeEntryId,
+    }),
     limit,
   );
-  console.log(JSON.stringify({ results, count: results.length, ...(truncated ? { truncated: true } : {}) }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        results,
+        count: results.length,
+        ...(truncated ? { truncated: true } : {}),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
-export async function cmdCreateSession(requestId: string, name: string, collectionRef?: string) {
+export async function cmdCreateSession(
+  requestId: string,
+  name: string,
+  collectionRef?: string,
+) {
   const client = await getClient();
   const collectionId = await requireCollection(client, collectionRef);
   const session = await client.replay.sessions.create({
@@ -581,11 +729,17 @@ export async function cmdCreateSession(requestId: string, name: string, collecti
     ...(collectionId ? { collectionId } : {}),
   });
   await client.replay.sessions.rename(session.id, name);
-  console.log(JSON.stringify({
-    id: session.id,
-    name,
-    collectionId: session.collectionId ?? collectionId ?? null,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        id: session.id,
+        name,
+        collectionId: session.collectionId ?? collectionId ?? null,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdRenameSession(sessionRef: string, name: string) {
@@ -599,7 +753,10 @@ export async function cmdRenameSession(sessionRef: string, name: string) {
   console.log(JSON.stringify({ id: session.id, name, renamed: true }, null, 2));
 }
 
-export async function cmdMoveSession(sessionRef: string, collectionRef: string) {
+export async function cmdMoveSession(
+  sessionRef: string,
+  collectionRef: string,
+) {
   const client = await getClient();
   const session = await resolveSession(client, sessionRef);
   if (!session) {
@@ -608,12 +765,18 @@ export async function cmdMoveSession(sessionRef: string, collectionRef: string) 
   }
   const collectionId = await requireCollection(client, collectionRef);
   const moved = await client.replay.sessions.move(session.id, collectionId!);
-  console.log(JSON.stringify({
-    id: moved.id,
-    name: moved.name,
-    collectionId: moved.collectionId,
-    moved: true,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        id: moved.id,
+        name: moved.name,
+        collectionId: moved.collectionId,
+        moved: true,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdDeleteSessions(ids: string[]) {
@@ -627,26 +790,41 @@ export async function cmdDeleteSessions(ids: string[]) {
 export async function cmdReplayCollections(limit?: number) {
   const client = await getClient();
   const { results, truncated } = await paginateSdkList(
-    (after, want) => after
-      ? client.replay.collections.list().after(after).first(want)
-      : client.replay.collections.list().first(want),
+    (after, want) =>
+      after
+        ? client.replay.collections.list().after(after).first(want)
+        : client.replay.collections.list().first(want),
     (n: any) => ({ id: n.id, name: n.name }),
     limit,
   );
-  console.log(JSON.stringify({ results, count: results.length, ...(truncated ? { truncated: true } : {}) }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        results,
+        count: results.length,
+        ...(truncated ? { truncated: true } : {}),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function cmdCreateCollection(name: string) {
   const client = await getClient();
   const collection = await client.replay.collections.create({ name });
-  console.log(JSON.stringify({ id: collection.id, name: collection.name }, null, 2));
+  console.log(
+    JSON.stringify({ id: collection.id, name: collection.name }, null, 2),
+  );
 }
 
 export async function cmdRenameCollection(collectionRef: string, name: string) {
   const client = await getClient();
   const collectionId = await requireCollection(client, collectionRef);
   await client.replay.collections.rename(collectionId!, name);
-  console.log(JSON.stringify({ id: collectionId, name, renamed: true }, null, 2));
+  console.log(
+    JSON.stringify({ id: collectionId, name, renamed: true }, null, 2),
+  );
 }
 
 export async function cmdDeleteCollection(collectionRef: string) {
@@ -663,30 +841,48 @@ export async function cmdCreateAutomateSession(requestId: string) {
   const result = await client.graphql.mutation(CREATE_AUTOMATE_SESSION, {
     input: { requestSource: { id: requestId } },
   });
-  console.log(JSON.stringify((result as any).createAutomateSession.session, null, 2));
+  console.log(
+    JSON.stringify((result as any).createAutomateSession.session, null, 2),
+  );
 }
 
 export async function cmdFuzz(sessionId: string, payloads: string[]) {
   const client = await getClient();
 
-  const check = await client.graphql.query(GET_AUTOMATE_SESSION, { id: sessionId });
+  const check = await client.graphql.query(GET_AUTOMATE_SESSION, {
+    id: sessionId,
+  });
   const session = (check as any).automateSession;
   if (!session) {
     console.error(`Automate session ${sessionId} not found`);
     process.exit(1);
   }
 
-  console.log(JSON.stringify({
-    note: "Starting automate task with existing session settings. Configure payloads in Caido UI.",
-    sessionId,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        note: "Starting automate task with existing session settings. Configure payloads in Caido UI.",
+        sessionId,
+      },
+      null,
+      2,
+    ),
+  );
 
-  const startResult = await client.graphql.mutation(START_AUTOMATE_TASK, { automateSessionId: sessionId });
+  const startResult = await client.graphql.mutation(START_AUTOMATE_TASK, {
+    automateSessionId: sessionId,
+  });
   const task = (startResult as any).startAutomateTask.automateTask;
 
-  console.log(JSON.stringify({
-    sessionId,
-    taskId: task.id,
-    status: "started",
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        sessionId,
+        taskId: task.id,
+        status: "started",
+      },
+      null,
+      2,
+    ),
+  );
 }

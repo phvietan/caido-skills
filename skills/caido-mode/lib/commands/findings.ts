@@ -6,7 +6,7 @@ export async function cmdFindings(limit: number) {
   const client = await getClient();
   const connection = await client.finding.list().first(limit);
 
-  const results = connection.edges.map(e => ({
+  const results = connection.edges.map((e) => ({
     id: e.node.id,
     title: e.node.title,
     reporter: e.node.reporter,

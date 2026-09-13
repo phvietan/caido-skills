@@ -1,15 +1,20 @@
 {
-  "name": "caido-mode",
+  "name": "caido-client",
   "version": "3.2.0",
-  "description": "Full Caido SDK CLI for Claude Code - search history, test via curl-through-Caido, replay, edit, match & replace (tamper) rules, findings, scopes, filters, and more",
+  "description": "Standalone Caido SDK CLI for search, replay, findings, scopes, filters, environments, and more",
   "type": "module",
   "scripts": {
-    "caido": "tsx caido-client.ts",
-    "test": "node --import tsx --test test/*.test.ts"
+    "dev": "bun run caido-client.ts",
+    "caido": "bun run caido-client.ts",
+    "build": "bun build --compile caido-client.ts --outfile dist/caido-client",
+    "build:all": "bun run build-all.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "@caido/sdk-client": "^0.4.0",
-    "graphql-tag": "^2.12.6",
-    "tsx": "^4.19.0"
+    "graphql-tag": "^2.12.6"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.6"
   }
 }

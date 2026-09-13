@@ -6,7 +6,7 @@ Full SDK CLI for [Caido](https://caido.io) built on the official [`@caido/sdk-cl
 
 Cookies and auth tokens are huge. Instead of copy-pasting 2KB of session cookies into every test request, you find an organic request in Caido's history that already has valid auth and work from it. Two modes, kept strictly separate:
 
-1. **Testing → curl, proxied through Caido.** `export-curl <id> --config` caches a base request's auth into a reusable `-K` config under `/tmp/caido/<host>/` — a **faithful static snapshot** of *all* its auth/identity headers + inline cookies; then probe with `curl -K auth.cfg "$BASE/path"`. All traffic goes through Caido into history; the big auth blob stays in a file.
+1. **Testing → curl, proxied through Caido.** `export-curl <id> --config` caches a base request's auth into a reusable `-K` config under the operating system's temporary directory — a **faithful static snapshot** of *all* its auth/identity headers + inline cookies; then probe with `curl -K auth.cfg "$BASE/path"`. All traffic goes through Caido into history; the big auth blob stays in a file.
 2. **Handoff → named replay sessions in named collections.** Only when handing requests to the user do you materialize them in Caido's UI.
 
 ## What's Covered
@@ -34,32 +34,49 @@ Cookies and auth tokens are huge. Instead of copy-pasting 2KB of session cookies
 
 ## Setup
 
-Requires [Node.js](https://nodejs.org) (v24+), a running Caido instance and a [PAT](https://docs.caido.io/dashboard/guides/create_pat.html).
+Development requires [Bun](https://bun.sh), a running Caido instance and a [PAT](https://docs.caido.io/dashboard/guides/create_pat.html). A compiled release is standalone and does not require Bun or Node.js on the user's machine.
 
 ```bash
-# Install dependencies
-npm install
+# Install dependencies and run from source
+bun install
 
 # 1. Create a PAT in Dashboard → Developer → Personal Access Tokens
 # 2. Setup (validates PAT via SDK and caches access token)
-npx tsx caido-client.ts setup <your-pat>
+bun run caido-client.ts setup <your-pat>
 
 # 3. Verify it works
-npx tsx caido-client.ts health
-npx tsx caido-client.ts recent --limit 1
+bun run caido-client.ts health
+bun run caido-client.ts recent --limit 1
 
 # Or use env var instead
 export CAIDO_PAT=<your-pat>
 ```
+
+## Standalone builds
+
+Build an executable for the current operating system and architecture:
+
+```bash
+bun run build
+./dist/caido-client --help
+```
+
+Build release executables for macOS (ARM64/x64), Linux (ARM64/x64), and Windows x64:
+
+```bash
+bun run build:all
+```
+
+The files are written to `dist/`. Each executable includes the Bun runtime, so recipients do not need to install Bun, Node.js, or npm. Release binaries for macOS and Windows should be code-signed before public distribution.
 
 The `setup` command uses the SDK's device code flow (auto-approved by your PAT) to obtain an access token, then saves the PAT and cached token to `~/.claude/config/secrets.json` via a custom `TokenCache` implementation. Subsequent runs load the cached token directly, and a valid cached token can be used even when the PAT is absent.
 
 **Multiple instances:** credentials are keyed by instance URL, so two Caido instances on one machine never clobber each other. `setup <pat> <url>` stores that instance (and makes it the active default); setting up a second URL adds it rather than overwriting. The active instance is `CAIDO_URL` env → stored default → `http://localhost:8080` — select per shell with `CAIDO_URL` (concurrency-safe). `auth-status` lists all configured instances and the active one.
 
 ```bash
-npx tsx caido-client.ts setup <pat-a> http://localhost:8080
-npx tsx caido-client.ts setup <pat-b> http://localhost:8081
-CAIDO_URL=http://localhost:8081 npx tsx caido-client.ts recent --compact
+bun run caido-client.ts setup <pat-a> http://localhost:8080
+bun run caido-client.ts setup <pat-b> http://localhost:8081
+CAIDO_URL=http://localhost:8081 bun run caido-client.ts recent --compact
 ```
 
 ## File Structure
@@ -83,27 +100,27 @@ lib/
 
 ## Usage
 
-All commands output JSON. Run `npx tsx caido-client.ts --help` for the complete list.
+All commands output JSON. Run `bun run caido-client.ts --help` for the complete list.
 
 ### Search & Browse
 
 ```bash
 # Search with HTTPQL (Caido's query language)
-npx tsx caido-client.ts search 'req.method.eq:"POST" AND resp.code.eq:200'
-npx tsx caido-client.ts search 'req.host.cont:"api"' --limit 50
-npx tsx caido-client.ts search 'req.host.cont:"api"' --recent --compact   # newest first, terse
+bun run caido-client.ts search 'req.method.eq:"POST" AND resp.code.eq:200'
+bun run caido-client.ts search 'req.host.cont:"api"' --limit 50
+bun run caido-client.ts search 'req.host.cont:"api"' --recent --compact   # newest first, terse
 
 # Get recent requests
-npx tsx caido-client.ts recent --limit 10 --compact
+bun run caido-client.ts recent --limit 10 --compact
 
 # Full request details with raw HTTP (JSON)
-npx tsx caido-client.ts get <request-id>
+bun run caido-client.ts get <request-id>
 
 # Just the response
-npx tsx caido-client.ts get-response <request-id>
+bun run caido-client.ts get-response <request-id>
 
 # Dump raw bytes to a file (e.g. seed a request body)
-npx tsx caido-client.ts raw <request-id> --out /tmp/caido/target.com/body.json
+bun run caido-client.ts raw <request-id> --out /tmp/caido/target.com/body.json
 ```
 
 ### Primary testing workflow (curl through Caido)
@@ -112,10 +129,10 @@ Cache a base request's auth once, then probe with curl. Every request goes throu
 
 ```bash
 # 1. find an authenticated base request
-npx tsx caido-client.ts search 'req.host.cont:"target.com" AND req.path.cont:"/api/user"' --recent --compact
+bun run caido-client.ts search 'req.host.cont:"target.com" AND req.path.cont:"/api/user"' --recent --compact
 # 2. ONCE: write a reusable curl config (faithful static snapshot of all auth headers + cookies)
-npx tsx caido-client.ts export-curl 8431 --config
-#    → /tmp/caido/target.com/auth.cfg (proxy + insecure + compressed + every auth header), BASE=…
+bun run caido-client.ts export-curl 8431 --config
+#    → <OS temp>/caido/target.com/auth.cfg (proxy + insecure + compressed + every auth header), BASE=…
 # 3. test (the config carries the Caido proxy + the full captured auth)
 BASE=https://target.com
 curl -K /tmp/caido/target.com/auth.cfg "$BASE/api/user/999"
@@ -125,7 +142,7 @@ curl -K /tmp/caido/target.com/auth.cfg -X POST "$BASE/api/profile" --data-binary
 The config is for **internal** testing. When you hand the user a reproduction, always give a **full self-contained** curl (all headers inline):
 
 ```bash
-npx tsx caido-client.ts export-curl 8431      # full, portable curl command for the user
+bun run caido-client.ts export-curl 8431      # full, portable curl command for the user
 ```
 
 Refresh lazily: only on 401/403 do you re-run `export-curl <fresh-id> --config`. The proxy defaults to the Caido URL; override with `setup --proxy <addr>` or `CAIDO_PROXY`.
@@ -136,14 +153,14 @@ Take an existing authenticated request and modify only what you need — cookies
 
 ```bash
 # Edit into a NEW named session
-npx tsx caido-client.ts edit <id> --path /api/user/999 --name "IDOR victim 999"
+bun run caido-client.ts edit <id> --path /api/user/999 --name "IDOR victim 999"
 
 # Edit an EXISTING session (declare name intent)
-npx tsx caido-client.ts edit-session "IDOR victim 999" --body '{"role":"admin"}' --nonach
-npx tsx caido-client.ts edit <id> --set-header "X-Forwarded-For: 127.0.0.1" --session "IDOR victim 999" --new-name "XFF bypass"
+bun run caido-client.ts edit-session "IDOR victim 999" --body '{"role":"admin"}' --nonach
+bun run caido-client.ts edit <id> --set-header "X-Forwarded-For: 127.0.0.1" --session "IDOR victim 999" --new-name "XFF bypass"
 
 # Find/replace text anywhere in the request
-npx tsx caido-client.ts edit <id> --replace "user123:::user456" --name "IDOR replace"
+bun run caido-client.ts edit <id> --replace "user123:::user456" --name "IDOR replace"
 ```
 
 `edit`, `replay`, and `send-raw` support connection overrides for virtual-host and upstream routing tests: `--sni`, `--connect-host`, `--connect-port`, `--connect-tls`, and `--connect-no-tls`.
@@ -153,10 +170,10 @@ npx tsx caido-client.ts edit <id> --replace "user123:::user456" --name "IDOR rep
 Work directly from an existing Caido replay tab/session.
 
 ```bash
-npx tsx caido-client.ts get-session <session-id-or-name> --compact
-npx tsx caido-client.ts replay-entries <session-id-or-name> --limit 20
-npx tsx caido-client.ts replay-entries <session-id-or-name> --raw --compact
-npx tsx caido-client.ts edit-session <session-id-or-name> --body '{"test":true}' --nonach --compact
+bun run caido-client.ts get-session <session-id-or-name> --compact
+bun run caido-client.ts replay-entries <session-id-or-name> --limit 20
+bun run caido-client.ts replay-entries <session-id-or-name> --raw --compact
+bun run caido-client.ts edit-session <session-id-or-name> --body '{"test":true}' --nonach --compact
 ```
 
 `session-entries` is accepted as an alias for `replay-entries`.
@@ -166,9 +183,9 @@ npx tsx caido-client.ts edit-session <session-id-or-name> --body '{"test":true}'
 `send-raw` and `replay` create a replay session, so `--name` is required. For ephemeral testing prefer the curl-through-Caido workflow above; use these when you want the request to land in Caido's Replay UI for handoff.
 
 ```bash
-npx tsx caido-client.ts send-raw --host example.com --raw @request.txt --name "G /"
-cat request.txt | npx tsx caido-client.ts send-raw --host example.com --raw - --name "G / (stdin)"
-npx tsx caido-client.ts replay <id> --name "repro" --connect-host 10.0.0.5 --connect-port 8443 --sni example.com
+bun run caido-client.ts send-raw --host example.com --raw @request.txt --name "G /"
+cat request.txt | bun run caido-client.ts send-raw --host example.com --raw - --name "G / (stdin)"
+bun run caido-client.ts replay <id> --name "repro" --connect-host 10.0.0.5 --connect-port 8443 --sni example.com
 ```
 
 `--raw` accepts a string with C-style escapes, `@file`, or `-` for stdin.
@@ -176,50 +193,50 @@ npx tsx caido-client.ts replay <id> --name "repro" --connect-host 10.0.0.5 --con
 ### Export to curl
 
 ```bash
-npx tsx caido-client.ts export-curl <request-id>            # full self-contained command (for the user)
-npx tsx caido-client.ts export-curl <request-id> --config   # faithful static -K config (internal)
-npx tsx caido-client.ts export-curl <request-id> --config --out /tmp/caido/host/auth.cfg
-npx tsx caido-client.ts export-curl <request-id> --config --cookie-jar   # follow Set-Cookie rotation (opt-in)
+bun run caido-client.ts export-curl <request-id>            # full self-contained command (for the user)
+bun run caido-client.ts export-curl <request-id> --config   # faithful static -K config (internal)
+bun run caido-client.ts export-curl <request-id> --config --out /tmp/caido/host/auth.cfg
+bun run caido-client.ts export-curl <request-id> --config --cookie-jar   # follow Set-Cookie rotation (opt-in)
 ```
 
 ### Findings
 
 ```bash
-npx tsx caido-client.ts findings
-npx tsx caido-client.ts get-finding <finding-id>
-npx tsx caido-client.ts create-finding <request-id> \
+bun run caido-client.ts findings
+bun run caido-client.ts get-finding <finding-id>
+bun run caido-client.ts create-finding <request-id> \
   --title "IDOR in user profile" \
   --description "Can access other users' data" \
   --reporter "rez0"
-npx tsx caido-client.ts update-finding <finding-id> --title "Updated title"
+bun run caido-client.ts update-finding <finding-id> --title "Updated title"
 ```
 
 ### Scopes
 
 ```bash
-npx tsx caido-client.ts scopes
-npx tsx caido-client.ts create-scope "Target" --allow "*.target.com" --deny "*.cdn.target.com"
-npx tsx caido-client.ts update-scope <id> --allow "*.target.com,*.api.target.com"
-npx tsx caido-client.ts delete-scope <id>
+bun run caido-client.ts scopes
+bun run caido-client.ts create-scope "Target" --allow "*.target.com" --deny "*.cdn.target.com"
+bun run caido-client.ts update-scope <id> --allow "*.target.com,*.api.target.com"
+bun run caido-client.ts delete-scope <id>
 ```
 
 ### Filter Presets
 
 ```bash
-npx tsx caido-client.ts filters
-npx tsx caido-client.ts create-filter "API Errors" --query 'req.path.cont:"/api/" AND resp.code.gte:400'
-npx tsx caido-client.ts create-filter "Auth" --query 'req.path.regex:"/(login|auth)/"' --alias "auth"
-npx tsx caido-client.ts delete-filter <id>
+bun run caido-client.ts filters
+bun run caido-client.ts create-filter "API Errors" --query 'req.path.cont:"/api/" AND resp.code.gte:400'
+bun run caido-client.ts create-filter "Auth" --query 'req.path.regex:"/(login|auth)/"' --alias "auth"
+bun run caido-client.ts delete-filter <id>
 ```
 
 ### Environments
 
 ```bash
-npx tsx caido-client.ts envs
-npx tsx caido-client.ts create-env "IDOR-Test"
-npx tsx caido-client.ts env-set <env-id> victim_id "user_456"
-npx tsx caido-client.ts select-env <env-id>
-npx tsx caido-client.ts delete-env <id>
+bun run caido-client.ts envs
+bun run caido-client.ts create-env "IDOR-Test"
+bun run caido-client.ts env-set <env-id> victim_id "user_456"
+bun run caido-client.ts select-env <env-id>
+bun run caido-client.ts delete-env <id>
 ```
 
 ### Sessions & Collections (handoff)
@@ -227,44 +244,44 @@ npx tsx caido-client.ts delete-env <id>
 Names are mandatory for sessions, and collections are referred to by name. Query existing collections before placing a session; one-off requests go in the default collection, multi-request handoffs get their own named collection.
 
 ```bash
-npx tsx caido-client.ts collections                                  # query first
-npx tsx caido-client.ts create-collection "Vuln chain - IDOR to ATO"
-npx tsx caido-client.ts create-session <request-id> --name "1. login" --collection "Vuln chain - IDOR to ATO"
-npx tsx caido-client.ts rename-session "1. login" "1. authenticate"
-npx tsx caido-client.ts move-session "1. authenticate" "Vuln chain - IDOR to ATO"
-npx tsx caido-client.ts sessions
-npx tsx caido-client.ts delete-sessions <id1>,<id2>
+bun run caido-client.ts collections                                  # query first
+bun run caido-client.ts create-collection "Vuln chain - IDOR to ATO"
+bun run caido-client.ts create-session <request-id> --name "1. login" --collection "Vuln chain - IDOR to ATO"
+bun run caido-client.ts rename-session "1. login" "1. authenticate"
+bun run caido-client.ts move-session "1. authenticate" "Vuln chain - IDOR to ATO"
+bun run caido-client.ts sessions
+bun run caido-client.ts delete-sessions <id1>,<id2>
 
-npx tsx caido-client.ts rename-collection "Vuln chain - IDOR to ATO" "Vuln chain - account takeover"
-npx tsx caido-client.ts delete-collection "Vuln chain - account takeover"
+bun run caido-client.ts rename-collection "Vuln chain - IDOR to ATO" "Vuln chain - account takeover"
+bun run caido-client.ts delete-collection "Vuln chain - account takeover"
 ```
 
 ### Fuzzing
 
 ```bash
-npx tsx caido-client.ts create-automate-session <request-id>
+bun run caido-client.ts create-automate-session <request-id>
 # Configure payload markers and wordlists in Caido UI first
-npx tsx caido-client.ts fuzz <session-id>
+bun run caido-client.ts fuzz <session-id>
 ```
 
 ### Tasks, Projects, Info & Health
 
 ```bash
-npx tsx caido-client.ts tasks
-npx tsx caido-client.ts cancel-task <task-id>
-npx tsx caido-client.ts projects
-npx tsx caido-client.ts select-project <id>
-npx tsx caido-client.ts viewer
-npx tsx caido-client.ts plugins
-npx tsx caido-client.ts health
+bun run caido-client.ts tasks
+bun run caido-client.ts cancel-task <task-id>
+bun run caido-client.ts projects
+bun run caido-client.ts select-project <id>
+bun run caido-client.ts viewer
+bun run caido-client.ts plugins
+bun run caido-client.ts health
 ```
 
 ### Intercept Control
 
 ```bash
-npx tsx caido-client.ts intercept-status
-npx tsx caido-client.ts intercept-enable
-npx tsx caido-client.ts intercept-disable
+bun run caido-client.ts intercept-status
+bun run caido-client.ts intercept-enable
+bun run caido-client.ts intercept-disable
 ```
 
 ### Output Control
@@ -299,15 +316,15 @@ Auto-rewrite requests/responses passing through Caido. A rule is a **section** �
 
 ```bash
 # preview a rule without creating it (no-op against the live engine)
-npx tsx caido-client.ts test-mr-rule --section req-header --operation add \
+bun run caido-client.ts test-mr-rule --section req-header --operation add \
   --match-name X-Test --replace hi --raw 'GET / HTTP/1.1\r\nHost: t.com\r\n\r\n'
 
 # inject auth on all proxied requests to a host, then enable
-ID=$(npx tsx caido-client.ts create-mr-rule --section req-header --operation add \
+ID=$(bun run caido-client.ts create-mr-rule --section req-header --operation add \
   --match-name Authorization --replace "Bearer …" --condition 'req.host.eq:"t.com"' | jq -r '.created.id')
-npx tsx caido-client.ts toggle-mr-rule "$ID" --on
+bun run caido-client.ts toggle-mr-rule "$ID" --on
 
-npx tsx caido-client.ts mr-rules
+bun run caido-client.ts mr-rules
 ```
 
 Sections: `req-method req-path req-query req-body req-first-line req-header req-all req-sni resp-body resp-status resp-first-line resp-header resp-all ws-up ws-down`. Operations: `raw` (matcher `--match-value`/`--match-regex`/`--match-full`), or `update`/`add`/`remove` for headers/query (`--match-name`). Replacer: `--replace <term>` or `--workflow <id>`.
@@ -328,7 +345,7 @@ To install as a skill:
 
 ```bash
 cp -r . ~/.claude/skills/caido-mode/
-cd ~/.claude/skills/caido-mode && npm install
+cd ~/.claude/skills/caido-mode && bun install
 ```
 
 ## License

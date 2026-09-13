@@ -2,8 +2,16 @@
 
 import { Client } from "@caido/sdk-client";
 import {
-  getClient, resolveProxy, resolveActiveUrl, readCaidoRoot, getCaidoInstance,
-  upsertCaidoInstance, SecretsTokenCache, SECRETS_PATH, isCachedTokenValid, QUIET_LOGGER,
+  getClient,
+  resolveProxy,
+  resolveActiveUrl,
+  readCaidoRoot,
+  getCaidoInstance,
+  upsertCaidoInstance,
+  SecretsTokenCache,
+  SECRETS_PATH,
+  isCachedTokenValid,
+  QUIET_LOGGER,
 } from "../client";
 import { PLUGIN_PACKAGES_QUERY } from "../graphql";
 
@@ -39,17 +47,23 @@ export async function cmdSetup(pat: string, url: string, proxy?: string) {
   });
 
   try {
-    await client.connect({ ready: { retries: 3, timeout: 5000, interval: 1000 } });
+    await client.connect({
+      ready: { retries: 3, timeout: 5000, interval: 1000 },
+    });
   } catch (err: any) {
     console.error(`Failed to connect: ${err.message}`);
     console.error("\nMake sure:");
     console.error(`  1. Caido is running at ${url}`);
-    console.error("  2. The PAT was created in Caido → Settings → Developer → Personal Access Tokens");
+    console.error(
+      "  2. The PAT was created in Caido → Settings → Developer → Personal Access Tokens",
+    );
     process.exit(1);
   }
 
   const viewer = await client.user.viewer();
-  console.log(`Authenticated as: ${(viewer as any).username || (viewer as any).id || JSON.stringify(viewer)}`);
+  console.log(
+    `Authenticated as: ${(viewer as any).username || (viewer as any).id || JSON.stringify(viewer)}`,
+  );
 
   // Persist PAT (+ proxy) under instances[url] and make it the active default.
   // The access token was already cached under instances[url] during connect.
@@ -59,7 +73,9 @@ export async function cmdSetup(pat: string, url: string, proxy?: string) {
   console.log(`PAT: ${pat.slice(0, 12)}...`);
   console.log(`Access token: cached`);
   console.log(`Proxy (curl -x): ${resolveProxy()}`);
-  console.log(`\nActive instance is now ${url}. Switch instances per shell with CAIDO_URL=<url>.`);
+  console.log(
+    `\nActive instance is now ${url}. Switch instances per shell with CAIDO_URL=<url>.`,
+  );
 }
 
 export async function cmdAuthStatus() {
@@ -70,7 +86,7 @@ export async function cmdAuthStatus() {
   const hasPat = !!process.env.CAIDO_PAT || !!instance.pat;
   const cachedTokenValid = isCachedTokenValid(instance);
   const cachedTokenExpiresAt = instance.cachedToken?.expiresAt ?? null;
-  const authMode = hasPat ? "pat" : (cachedTokenValid ? "cached-token" : "none");
+  const authMode = hasPat ? "pat" : cachedTokenValid ? "cached-token" : "none";
 
   const base = {
     activeUrl: url,
@@ -84,24 +100,48 @@ export async function cmdAuthStatus() {
   };
 
   if (!hasPat && !cachedTokenValid) {
-    console.log(JSON.stringify({
-      authenticated: false,
-      ...base,
-      error: `No usable auth for ${url}. Run: setup <pat> ${url}  (or set CAIDO_PAT / CAIDO_URL).`,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          authenticated: false,
+          ...base,
+          error: `No usable auth for ${url}. Run: setup <pat> ${url}  (or set CAIDO_PAT / CAIDO_URL).`,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   const statusCache = new SecretsTokenCache(url);
   const pat = process.env.CAIDO_PAT || instance.pat || "";
-  const client = new Client({ url, auth: { pat, cache: statusCache }, logger: QUIET_LOGGER });
+  const client = new Client({
+    url,
+    auth: { pat, cache: statusCache },
+    logger: QUIET_LOGGER,
+  });
 
   try {
-    await client.connect({ ready: { retries: 2, timeout: 3000, interval: 1000 } });
+    await client.connect({
+      ready: { retries: 2, timeout: 3000, interval: 1000 },
+    });
     const viewer = await client.user.viewer();
     const health = await client.health();
-    console.log(JSON.stringify({ authenticated: true, ...base, user: viewer, health }, null, 2));
+    console.log(
+      JSON.stringify(
+        { authenticated: true, ...base, user: viewer, health },
+        null,
+        2,
+      ),
+    );
   } catch (err: any) {
-    console.log(JSON.stringify({ authenticated: false, ...base, error: err.message }, null, 2));
+    console.log(
+      JSON.stringify(
+        { authenticated: false, ...base, error: err.message },
+        null,
+        2,
+      ),
+    );
   }
 }

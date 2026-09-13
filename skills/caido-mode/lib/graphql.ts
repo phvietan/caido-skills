@@ -16,43 +16,61 @@ export const INTERCEPT_OPTIONS_QUERY = gql`
       request {
         enabled
         filter {
-          ... on HTTPQL { code }
-          ... on StreamQL { code }
+          ... on HTTPQL {
+            code
+          }
+          ... on StreamQL {
+            code
+          }
         }
       }
       response {
         enabled
         filter {
-          ... on HTTPQL { code }
-          ... on StreamQL { code }
+          ... on HTTPQL {
+            code
+          }
+          ... on StreamQL {
+            code
+          }
         }
       }
-      scope { scopeId }
+      scope {
+        scopeId
+      }
     }
   }
 `;
 
 export const PAUSE_INTERCEPT = gql`
   mutation {
-    pauseIntercept { status }
+    pauseIntercept {
+      status
+    }
   }
 `;
 
 export const RESUME_INTERCEPT = gql`
   mutation {
-    resumeIntercept { status }
+    resumeIntercept {
+      status
+    }
   }
 `;
 
 // ── Automate / Fuzz ──
 
 export const CREATE_AUTOMATE_SESSION = gql`
-  mutation($input: CreateAutomateSessionInput!) {
+  mutation ($input: CreateAutomateSessionInput!) {
     createAutomateSession(input: $input) {
       session {
         id
         name
-        connection { host port isTLS }
+        connection {
+          host
+          port
+          isTLS
+        }
         raw
       }
     }
@@ -60,23 +78,36 @@ export const CREATE_AUTOMATE_SESSION = gql`
 `;
 
 export const GET_AUTOMATE_SESSION = gql`
-  query($id: ID!) {
+  query ($id: ID!) {
     automateSession(id: $id) {
       id
       name
-      connection { host port isTLS }
+      connection {
+        host
+        port
+        isTLS
+      }
       raw
       settings {
-        payloads { options { ... on AutomateSimpleListPayload { list } } }
+        payloads {
+          options {
+            ... on AutomateSimpleListPayload {
+              list
+            }
+          }
+        }
       }
     }
   }
 `;
 
 export const START_AUTOMATE_TASK = gql`
-  mutation($automateSessionId: ID!) {
+  mutation ($automateSessionId: ID!) {
     startAutomateTask(automateSessionId: $automateSessionId) {
-      automateTask { id paused }
+      automateTask {
+        id
+        paused
+      }
     }
   }
 `;
@@ -87,9 +118,12 @@ export const START_AUTOMATE_TASK = gql`
 // ourselves with base64-encoded bytes for send-raw.
 
 export const CREATE_REPLAY_SESSION_RAW = gql`
-  mutation($input: CreateReplaySessionInput!) {
+  mutation ($input: CreateReplaySessionInput!) {
     createReplaySession(input: $input) {
-      session { id name }
+      session {
+        id
+        name
+      }
     }
   }
 `;
@@ -104,9 +138,28 @@ export const PLUGIN_PACKAGES_QUERY = gql`
       name
       version
       plugins {
-        ... on PluginBackend { id manifestId name enabled state { running error } }
-        ... on PluginFrontend { id manifestId name enabled }
-        ... on PluginWorkflow { id manifestId name enabled }
+        ... on PluginBackend {
+          id
+          manifestId
+          name
+          enabled
+          state {
+            running
+            error
+          }
+        }
+        ... on PluginFrontend {
+          id
+          manifestId
+          name
+          enabled
+        }
+        ... on PluginWorkflow {
+          id
+          manifestId
+          name
+          enabled
+        }
       }
     }
   }
@@ -122,7 +175,13 @@ export const TAMPER_RULE_COLLECTIONS = gql`
     tamperRuleCollections {
       id
       name
-      rules { id name enable { rank } }
+      rules {
+        id
+        name
+        enable {
+          rank
+        }
+      }
     }
   }
 `;
@@ -146,8 +205,10 @@ export const UPDATE_TAMPER_RULE = gql`
 `;
 
 export const DELETE_TAMPER_RULE = gql`
-  mutation($id: ID!) {
-    deleteTamperRule(id: $id) { deletedId }
+  mutation ($id: ID!) {
+    deleteTamperRule(id: $id) {
+      deletedId
+    }
   }
 `;
 
@@ -173,28 +234,42 @@ export const MOVE_TAMPER_RULE = gql`
 `;
 
 export const TEST_TAMPER_RULE = gql`
-  mutation($input: TestTamperRuleInput!) {
+  mutation ($input: TestTamperRuleInput!) {
     testTamperRule(input: $input) {
       raw
-      error { __typename }
+      error {
+        __typename
+      }
     }
   }
 `;
 
 export const CREATE_TAMPER_RULE_COLLECTION = gql`
-  mutation($input: CreateTamperRuleCollectionInput!) {
-    createTamperRuleCollection(input: $input) { collection { id name } }
+  mutation ($input: CreateTamperRuleCollectionInput!) {
+    createTamperRuleCollection(input: $input) {
+      collection {
+        id
+        name
+      }
+    }
   }
 `;
 
 export const RENAME_TAMPER_RULE_COLLECTION = gql`
-  mutation($id: ID!, $name: String!) {
-    renameTamperRuleCollection(id: $id, name: $name) { collection { id name } }
+  mutation ($id: ID!, $name: String!) {
+    renameTamperRuleCollection(id: $id, name: $name) {
+      collection {
+        id
+        name
+      }
+    }
   }
 `;
 
 export const DELETE_TAMPER_RULE_COLLECTION = gql`
-  mutation($id: ID!) {
-    deleteTamperRuleCollection(id: $id) { deletedId }
+  mutation ($id: ID!) {
+    deleteTamperRuleCollection(id: $id) {
+      deletedId
+    }
   }
 `;

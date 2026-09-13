@@ -8,13 +8,25 @@ export function decodeRaw(raw: Uint8Array | undefined): string {
 }
 
 /** Split a raw HTTP message at the first blank line. Returns headerBlock, body (undefined = no separator found), and the separator string. */
-export function splitRaw(raw: string): { headerBlock: string; body: string | undefined; sep: "\r\n\r\n" | "\n\n" | undefined } {
+export function splitRaw(raw: string): {
+  headerBlock: string;
+  body: string | undefined;
+  sep: "\r\n\r\n" | "\n\n" | undefined;
+} {
   const idxCrlf = raw.indexOf("\r\n\r\n");
   const idxLf = raw.indexOf("\n\n");
   if (idxCrlf >= 0 && (idxLf < 0 || idxCrlf <= idxLf)) {
-    return { headerBlock: raw.slice(0, idxCrlf), body: raw.slice(idxCrlf + 4), sep: "\r\n\r\n" };
+    return {
+      headerBlock: raw.slice(0, idxCrlf),
+      body: raw.slice(idxCrlf + 4),
+      sep: "\r\n\r\n",
+    };
   } else if (idxLf >= 0) {
-    return { headerBlock: raw.slice(0, idxLf), body: raw.slice(idxLf + 2), sep: "\n\n" };
+    return {
+      headerBlock: raw.slice(0, idxLf),
+      body: raw.slice(idxLf + 2),
+      sep: "\n\n",
+    };
   }
   return { headerBlock: raw, body: undefined, sep: undefined };
 }
@@ -35,7 +47,11 @@ export function formatHttpRaw(decoded: string, opts: OutputOpts): string {
   return truncateBody(decoded, opts.maxBodyLines, opts.maxBodyChars);
 }
 
-export function truncateBody(decoded: string, maxLines: number, maxChars: number): string {
+export function truncateBody(
+  decoded: string,
+  maxLines: number,
+  maxChars: number,
+): string {
   const noLineLimit = maxLines <= 0;
   const noCharLimit = maxChars <= 0;
   if (noLineLimit && noCharLimit) return decoded;
@@ -60,13 +76,17 @@ export function truncateBody(decoded: string, maxLines: number, maxChars: number
   let body = decoded.substring(splitIndex + separator.length);
 
   if (!noCharLimit && body.length > maxChars) {
-    body = body.substring(0, maxChars) + `\n\n[TRUNCATED at ${maxChars} chars, total ${decoded.length - splitIndex - separator.length}]`;
+    body =
+      body.substring(0, maxChars) +
+      `\n\n[TRUNCATED at ${maxChars} chars, total ${decoded.length - splitIndex - separator.length}]`;
   }
 
   if (!noLineLimit) {
     const lines = body.split("\n");
     if (lines.length > maxLines) {
-      body = lines.slice(0, maxLines).join("\n") + `\n\n[TRUNCATED at ${maxLines} lines, total ${lines.length}]`;
+      body =
+        lines.slice(0, maxLines).join("\n") +
+        `\n\n[TRUNCATED at ${maxLines} lines, total ${lines.length}]`;
     }
   }
 
@@ -90,8 +110,15 @@ function urlHost(host: string): string {
  * Single source of truth shared by rawToCurl and the curl-config builder.
  */
 export const CURL_MANAGED_HEADERS = new Set([
-  "host", "content-length", "accept-encoding", "connection",
-  "transfer-encoding", "proxy-connection", "keep-alive", "upgrade", "te",
+  "host",
+  "content-length",
+  "accept-encoding",
+  "connection",
+  "transfer-encoding",
+  "proxy-connection",
+  "keep-alive",
+  "upgrade",
+  "te",
 ]);
 
 /**
@@ -100,16 +127,24 @@ export const CURL_MANAGED_HEADERS = new Set([
  * is shell-quoted — these come from proxied traffic and the output is pasted into a shell.
  * `--compressed` is added (and Accept-Encoding dropped) so responses are readable.
  */
-export function rawToCurl(rawRequest: string, host: string, port: number, isTls: boolean): string {
+export function rawToCurl(
+  rawRequest: string,
+  host: string,
+  port: number,
+  isTls: boolean,
+): string {
   const lines = rawRequest.split(/\r?\n/);
   if (lines.length === 0) return "";
 
   const [method, path] = lines[0].split(" ");
   const scheme = isTls ? "https" : "http";
-  const portSuffix = (isTls && port === 443) || (!isTls && port === 80) ? "" : `:${port}`;
+  const portSuffix =
+    (isTls && port === 443) || (!isTls && port === 80) ? "" : `:${port}`;
   const url = `${scheme}://${urlHost(host)}${portSuffix}${path ?? ""}`;
 
-  const parts = [`curl --compressed -X ${shQuote(method ?? "GET")} ${shQuote(url)}`];
+  const parts = [
+    `curl --compressed -X ${shQuote(method ?? "GET")} ${shQuote(url)}`,
+  ];
 
   let i = 1;
   for (; i < lines.length; i++) {
@@ -124,7 +159,10 @@ export function rawToCurl(rawRequest: string, host: string, port: number, isTls:
     }
   }
 
-  const body = lines.slice(i + 1).join("\n").trim();
+  const body = lines
+    .slice(i + 1)
+    .join("\n")
+    .trim();
   if (body) {
     // --data-raw (not -d): a body starting with '@' must be sent literally, not
     // treated by curl as a "read this file" instruction.
