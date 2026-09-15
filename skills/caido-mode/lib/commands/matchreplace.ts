@@ -10,21 +10,8 @@
  * Structures were validated against a live instance via `testTamperRule`.
  */
 
-import { getClient } from "../client";
+import { CaidoClient } from "../client";
 import { resolveRaw, ensureHeaderCrlf } from "./replay";
-import {
-  TAMPER_RULE_COLLECTIONS,
-  CREATE_TAMPER_RULE,
-  UPDATE_TAMPER_RULE,
-  DELETE_TAMPER_RULE,
-  TOGGLE_TAMPER_RULE,
-  RENAME_TAMPER_RULE,
-  MOVE_TAMPER_RULE,
-  TEST_TAMPER_RULE,
-  CREATE_TAMPER_RULE_COLLECTION,
-  RENAME_TAMPER_RULE_COLLECTION,
-  DELETE_TAMPER_RULE_COLLECTION,
-} from "../graphql";
 
 // ── Section / operation specification ──
 
@@ -217,7 +204,7 @@ async function resolveTamperCollectionId(
   client: any,
   idOrName: string,
 ): Promise<string | undefined> {
-  const r: any = await client.graphql.query(TAMPER_RULE_COLLECTIONS, {});
+  const r: any = await client.tamperRuleCollections();
   for (const c of r.tamperRuleCollections) {
     if (c.id === idOrName || c.name === idOrName) return c.id;
   }
@@ -232,9 +219,7 @@ async function requireTamperCollection(
   if (!id) {
     console.error(`M&R collection "${ref}" not found.`);
     console.error(`List:    caido-client mr-collections`);
-    console.error(
-      `Create:  caido-client create-mr-collection "${ref}"`,
-    );
+    console.error(`Create:  caido-client create-mr-collection "${ref}"`);
     process.exit(1);
   }
   return id;
@@ -242,7 +227,7 @@ async function requireTamperCollection(
 
 /** collectionId is required on create; fall back to Caido's "Default Collection" (or the first one). */
 async function defaultTamperCollectionId(client: any): Promise<string> {
-  const r: any = await client.graphql.query(TAMPER_RULE_COLLECTIONS, {});
+  const r: any = await client.tamperRuleCollections();
   const cols = r.tamperRuleCollections;
   if (!cols.length) {
     console.error(
@@ -271,8 +256,8 @@ function fmtRule(rule: any) {
 // ── Commands ──
 
 export async function cmdMrRules() {
-  const client = await getClient();
-  const r: any = await client.graphql.query(TAMPER_RULE_COLLECTIONS, {});
+  const client = await CaidoClient.getClient();
+  const r: any = await client.tamperRuleCollections();
   const rules: any[] = [];
   for (const c of r.tamperRuleCollections) {
     for (const rule of c.rules || []) {
@@ -288,8 +273,8 @@ export async function cmdMrRules() {
 }
 
 export async function cmdMrCollections() {
-  const client = await getClient();
-  const r: any = await client.graphql.query(TAMPER_RULE_COLLECTIONS, {});
+  const client = await CaidoClient.getClient();
+  const r: any = await client.tamperRuleCollections();
   const results = r.tamperRuleCollections.map((c: any) => ({
     id: c.id,
     name: c.name,
@@ -299,18 +284,13 @@ export async function cmdMrCollections() {
 }
 
 export async function cmdCreateMrRule(o: MrRuleOpts, collectionRef?: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   // collectionId is required by Caido; default to the "Default Collection".
   const collectionId = collectionRef
     ? await requireTamperCollection(client, collectionRef)
     : await defaultTamperCollectionId(client);
   const input = buildRuleInput(o, collectionId);
-  const r: any = await client.graphql.mutation(CREATE_TAMPER_RULE, { input });
-  const payload = r.createTamperRule;
-  if (payload.error) {
-    console.error(`Caido rejected the rule: ${payload.error.__typename}`);
-    process.exit(1);
-  }
+  const payload = await client.createTamperRule(input);
   console.log(
     JSON.stringify(
       { created: fmtRule(payload.rule), section: input.section },
@@ -321,17 +301,9 @@ export async function cmdCreateMrRule(o: MrRuleOpts, collectionRef?: string) {
 }
 
 export async function cmdUpdateMrRule(id: string, o: MrRuleOpts) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const input = buildRuleInput(o); // no collectionId in UpdateTamperRuleInput
-  const r: any = await client.graphql.mutation(UPDATE_TAMPER_RULE, {
-    id,
-    input,
-  });
-  const payload = r.updateTamperRule;
-  if (payload.error) {
-    console.error(`Caido rejected the update: ${payload.error.__typename}`);
-    process.exit(1);
-  }
+  const payload = await client.updateTamperRule(id, input);
   console.log(
     JSON.stringify(
       { updated: fmtRule(payload.rule), section: input.section },
@@ -342,106 +314,56 @@ export async function cmdUpdateMrRule(id: string, o: MrRuleOpts) {
 }
 
 export async function cmdDeleteMrRule(id: string) {
-  const client = await getClient();
-  const r: any = await client.graphql.mutation(DELETE_TAMPER_RULE, { id });
-  console.log(
-    JSON.stringify({ deleted: r.deleteTamperRule.deletedId }, null, 2),
-  );
+  const client = await CaidoClient.getClient();
+  const deleted = await client.deleteTamperRule(id);
+  console.log(JSON.stringify({ deleted }, null, 2));
 }
 
 export async function cmdToggleMrRule(id: string, enabled: boolean) {
-  const client = await getClient();
-  const r: any = await client.graphql.mutation(TOGGLE_TAMPER_RULE, {
-    id,
-    enabled,
-  });
-  const payload = r.toggleTamperRule;
-  if (payload.error) {
-    console.error(`Caido rejected the toggle: ${payload.error.__typename}`);
-    process.exit(1);
-  }
+  const client = await CaidoClient.getClient();
+  const rule = await client.toggleTamperRule(id, enabled);
   console.log(
-    JSON.stringify(
-      { rule: fmtRule(payload.rule), enabled: isEnabled(payload.rule) },
-      null,
-      2,
-    ),
+    JSON.stringify({ rule: fmtRule(rule), enabled: isEnabled(rule) }, null, 2),
   );
 }
 
 export async function cmdRenameMrRule(id: string, name: string) {
-  const client = await getClient();
-  const r: any = await client.graphql.mutation(RENAME_TAMPER_RULE, {
-    id,
-    name,
-  });
-  console.log(
-    JSON.stringify({ renamed: fmtRule(r.renameTamperRule.rule) }, null, 2),
-  );
+  const client = await CaidoClient.getClient();
+  const rule = await client.renameTamperRule(id, name);
+  console.log(JSON.stringify({ renamed: fmtRule(rule) }, null, 2));
 }
 
 export async function cmdMoveMrRule(id: string, collectionRef: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const collectionId = await requireTamperCollection(client, collectionRef);
-  const r: any = await client.graphql.mutation(MOVE_TAMPER_RULE, {
-    id,
-    collectionId,
-  });
-  console.log(
-    JSON.stringify({ moved: fmtRule(r.moveTamperRule.rule) }, null, 2),
-  );
+  const rule = await client.moveTamperRule(id, collectionId);
+  console.log(JSON.stringify({ moved: fmtRule(rule) }, null, 2));
 }
 
 export async function cmdTestMrRule(o: MrRuleOpts, raw: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const section = buildTamperSection(o);
   const resolved = ensureHeaderCrlf(await resolveRaw(raw));
-  const r: any = await client.graphql.mutation(TEST_TAMPER_RULE, {
-    input: { raw: b64(resolved), section },
-  });
-  const payload = r.testTamperRule;
-  if (payload.error) {
-    console.error(`Rule could not be applied: ${payload.error.__typename}`);
-    process.exit(1);
-  }
+  const payload = await client.testTamperRule({ raw: b64(resolved), section });
   console.log(JSON.stringify({ section, result: unb64(payload.raw) }, null, 2));
 }
 
 export async function cmdCreateMrCollection(name: string) {
-  const client = await getClient();
-  const r: any = await client.graphql.mutation(CREATE_TAMPER_RULE_COLLECTION, {
-    input: { name },
-  });
-  console.log(JSON.stringify(r.createTamperRuleCollection.collection, null, 2));
+  const client = await CaidoClient.getClient();
+  const collection = await client.createTamperRuleCollection(name);
+  console.log(JSON.stringify(collection, null, 2));
 }
 
 export async function cmdRenameMrCollection(ref: string, name: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const id = await requireTamperCollection(client, ref);
-  const r: any = await client.graphql.mutation(RENAME_TAMPER_RULE_COLLECTION, {
-    id,
-    name,
-  });
-  console.log(
-    JSON.stringify(
-      { renamed: r.renameTamperRuleCollection.collection },
-      null,
-      2,
-    ),
-  );
+  const collection = await client.renameTamperRuleCollection(id, name);
+  console.log(JSON.stringify({ renamed: collection }, null, 2));
 }
 
 export async function cmdDeleteMrCollection(ref: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const id = await requireTamperCollection(client, ref);
-  const r: any = await client.graphql.mutation(DELETE_TAMPER_RULE_COLLECTION, {
-    id,
-  });
-  console.log(
-    JSON.stringify(
-      { deleted: r.deleteTamperRuleCollection.deletedId },
-      null,
-      2,
-    ),
-  );
+  const deleted = await client.deleteTamperRuleCollection(id);
+  console.log(JSON.stringify({ deleted }, null, 2));
 }

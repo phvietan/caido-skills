@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "bun run caido-client.ts",
     "caido": "bun run caido-client.ts",
-    "build": "bun build --compile caido-client.ts --outfile dist/caido-client",
+    "build": "bun run build.ts",
     "build:all": "bun run build-all.ts",
     "test": "bun test"
   },
   "dependencies": {
     "@caido/sdk-client": "^0.4.0",
+    "commander": "^15.0.0",
     "graphql-tag": "^2.12.6"
   },
   "devDependencies": {

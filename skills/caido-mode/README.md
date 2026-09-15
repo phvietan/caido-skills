@@ -6,31 +6,32 @@ Full SDK CLI for [Caido](https://caido.io) built on the official [`@caido/sdk-cl
 
 Cookies and auth tokens are huge. Instead of copy-pasting 2KB of session cookies into every test request, you find an organic request in Caido's history that already has valid auth and work from it. Two modes, kept strictly separate:
 
-1. **Testing → curl, proxied through Caido.** `export-curl <id> --config` caches a base request's auth into a reusable `-K` config under the operating system's temporary directory — a **faithful static snapshot** of *all* its auth/identity headers + inline cookies; then probe with `curl -K auth.cfg "$BASE/path"`. All traffic goes through Caido into history; the big auth blob stays in a file.
+1. **Testing → curl, proxied through Caido.** `export-curl <id> --config` caches a base request's auth into a reusable `-K` config under the operating system's temporary directory — a **faithful static snapshot** of _all_ its auth/identity headers + inline cookies; then probe with `curl -K auth.cfg "$BASE/path"`. All traffic goes through Caido into history; the big auth blob stays in a file.
 2. **Handoff → named replay sessions in named collections.** Only when handing requests to the user do you materialize them in Caido's UI.
 
 ## What's Covered
 
-| Category | Commands |
-|----------|----------|
-| **HTTP History** | `search`, `recent`, `get`, `get-response`, `raw`, `export-curl` |
-| **curl testing** | `export-curl` (full command), `export-curl --config` (faithful static `-K` config: all auth headers + cookies), `raw` (dump bytes) |
-| **Edit & Replay** | `edit`, `replay`, `send-raw`, `edit-session` |
-| **Replay Tab Lookup** | `get-session`, `replay-entries`, `session-entries` |
-| **Sessions** | `create-session`, `rename-session`, `move-session`, `sessions`, `delete-sessions` |
-| **Collections** | `collections`, `create-collection`, `rename-collection`, `delete-collection` |
-| **Fuzzing** | `create-automate-session`, `fuzz` |
-| **Scopes** | `scopes`, `create-scope`, `update-scope`, `delete-scope` |
-| **Filter Presets** | `filters`, `create-filter`, `update-filter`, `delete-filter` |
-| **Environments** | `envs`, `create-env`, `select-env`, `env-set`, `delete-env` |
-| **Findings** | `findings`, `get-finding`, `create-finding`, `update-finding` |
-| **Tasks** | `tasks`, `cancel-task` |
-| **Projects** | `projects`, `select-project` |
-| **Hosted Files** | `hosted-files`, `delete-hosted-file` |
-| **Intercept** | `intercept-status`, `intercept-enable`, `intercept-disable` |
-| **Match & Replace** | `mr-rules`, `mr-collections`, `create-mr-rule`, `test-mr-rule`, `toggle-mr-rule`, `rename-mr-rule`, `move-mr-rule`, `update-mr-rule`, `delete-mr-rule`, `create/rename/delete-mr-collection` |
-| **Info** | `viewer`, `plugins`, `health` |
-| **Auth** | `setup`, `auth-status` |
+| Category              | Commands                                                                                                                                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **HTTP History**      | `search`, `recent`, `get`, `get-response`, `raw`, `export-curl`                                                                                                                              |
+| **curl testing**      | `export-curl` (full command), `export-curl --config` (faithful static `-K` config: all auth headers + cookies), `raw` (dump bytes)                                                           |
+| **Edit & Replay**     | `edit`, `replay`, `send-raw`, `edit-session`                                                                                                                                                 |
+| **Replay Tab Lookup** | `get-session`, `replay-entries`, `session-entries`                                                                                                                                           |
+| **Sessions**          | `create-session`, `rename-session`, `move-session`, `sessions`, `delete-sessions`                                                                                                            |
+| **Collections**       | `collections`, `create-collection`, `rename-collection`, `delete-collection`                                                                                                                 |
+| **Fuzzing**           | `create-automate-session`, `fuzz`                                                                                                                                                            |
+| **Automation**        | `run-workflow`, `call-plugin`                                                                                                                                                                |
+| **Scopes**            | `scopes`, `create-scope`, `update-scope`, `delete-scope`                                                                                                                                     |
+| **Filter Presets**    | `filters`, `create-filter`, `update-filter`, `delete-filter`                                                                                                                                 |
+| **Environments**      | `envs`, `create-env`, `select-env`, `env-set`, `delete-env`                                                                                                                                  |
+| **Findings**          | `findings`, `get-finding`, `create-finding`, `update-finding`                                                                                                                                |
+| **Tasks**             | `tasks`, `cancel-task`                                                                                                                                                                       |
+| **Projects**          | `projects`, `select-project`                                                                                                                                                                 |
+| **Hosted Files**      | `hosted-files`, `delete-hosted-file`                                                                                                                                                         |
+| **Intercept**         | `intercept-status`, `intercept-enable`, `intercept-disable`                                                                                                                                  |
+| **Match & Replace**   | `mr-rules`, `mr-collections`, `create-mr-rule`, `test-mr-rule`, `toggle-mr-rule`, `rename-mr-rule`, `move-mr-rule`, `update-mr-rule`, `delete-mr-rule`, `create/rename/delete-mr-collection` |
+| **Info**              | `viewer`, `plugins`, `health`                                                                                                                                                                |
+| **Auth**              | `setup`, `auth-status`                                                                                                                                                                       |
 
 ## Setup
 
@@ -69,7 +70,7 @@ bun run build:all
 
 The files are written to `dist/`. Each executable includes the Bun runtime, so recipients do not need to install Bun, Node.js, or npm. Release binaries for macOS and Windows should be code-signed before public distribution.
 
-The `setup` command uses the SDK's device code flow (auto-approved by your PAT) to obtain an access token, then saves the PAT and cached token to `~/.claude/config/secrets.json` via a custom `TokenCache` implementation. Subsequent runs load the cached token directly, and a valid cached token can be used even when the PAT is absent.
+The `setup` command uses the SDK's device code flow (auto-approved by your PAT) to obtain an access token, then saves the PAT and cached token to `~/.config/caido-client/settings.json` via a custom `TokenCache` implementation. Override the location with `CAIDO_SETTINGS_PATH`. Existing credentials are imported once from `~/.claude/config/secrets.json` when the new settings file does not exist. Subsequent runs load the cached token directly, and a valid cached token can be used even when the PAT is absent.
 
 **Multiple instances:** credentials are keyed by instance URL, so two Caido instances on one machine never clobber each other. `setup <pat> <url>` stores that instance (and makes it the active default); setting up a second URL adds it rather than overwriting. The active instance is `CAIDO_URL` env → stored default → `http://localhost:8080` — select per shell with `CAIDO_URL` (concurrency-safe). `auth-status` lists all configured instances and the active one.
 
@@ -84,7 +85,8 @@ CAIDO_URL=http://localhost:8081 bun run caido-client.ts recent --compact
 ```
 caido-client.ts          # CLI entry point — arg parsing + command dispatch
 lib/
-  client.ts              # SDK Client singleton, SecretsTokenCache, auth config
+  client.ts              # SDK Client singleton and CaidoTokenCache
+  settings.ts            # App-owned settings storage and legacy migration
   graphql.ts             # gql documents for features not yet in SDK
   output.ts              # Output formatting (truncation, headers-only, raw→curl)
   types.ts               # Shared types (OutputOpts)
@@ -264,6 +266,20 @@ bun run caido-client.ts create-automate-session <request-id>
 bun run caido-client.ts fuzz <session-id>
 ```
 
+### Workflow and plugin automation
+
+```bash
+# Run an active workflow with a saved request as its HTTP input.
+bun run caido-client.ts run-workflow <workflow-id> <request-id>
+
+# Call a registered backend-plugin function with request-id as its single argument.
+# IDs here are manifest IDs (shown by `plugins`), not installation UUIDs.
+bun run caido-client.ts call-plugin <package-manifest-id> <backend-manifest-id> <function-name> <request-id>
+```
+
+Plugin functions have plugin-defined signatures. `call-plugin` expects the selected
+function to accept one string argument containing the Caido request ID.
+
 ### Tasks, Projects, Info & Health
 
 ```bash
@@ -286,13 +302,13 @@ bun run caido-client.ts intercept-disable
 
 ### Output Control
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--max-body <n>` | 200 | Max response body lines (0 = unlimited) |
-| `--max-body-chars <n>` | 5000 | Max response body chars (0 = unlimited) |
-| `--no-request` | off | Skip request raw in output |
-| `--headers-only` | off | Show only HTTP headers, no body |
-| `--compact` | off | Shorthand for `--no-request --max-body 50 --max-body-chars 5000` |
+| Flag                   | Default | Description                                                      |
+| ---------------------- | ------- | ---------------------------------------------------------------- |
+| `--max-body <n>`       | 200     | Max response body lines (0 = unlimited)                          |
+| `--max-body-chars <n>` | 5000    | Max response body chars (0 = unlimited)                          |
+| `--no-request`         | off     | Skip request raw in output                                       |
+| `--headers-only`       | off     | Show only HTTP headers, no body                                  |
+| `--compact`            | off     | Shorthand for `--no-request --max-body 50 --max-body-chars 5000` |
 
 ## HTTPQL Quick Reference
 

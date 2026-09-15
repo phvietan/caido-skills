@@ -1,34 +1,22 @@
 /** Info commands: viewer, plugins, health, setup, auth-status */
 
-import { Client } from "@caido/sdk-client";
-import {
-  getClient,
-  resolveProxy,
-  resolveActiveUrl,
-  readCaidoRoot,
-  getCaidoInstance,
-  upsertCaidoInstance,
-  SecretsTokenCache,
-  SECRETS_PATH,
-  isCachedTokenValid,
-  QUIET_LOGGER,
-} from "../client";
-import { PLUGIN_PACKAGES_QUERY } from "../graphql";
+import { CaidoClient } from "../client";
+import { CaidoGlobalSettings } from "../settings";
 
 export async function cmdViewer() {
-  const client = await getClient();
-  const viewer = await client.user.viewer();
+  const client = await CaidoClient.getClient();
+  const viewer = await client.viewer();
   console.log(JSON.stringify(viewer, null, 2));
 }
 
 export async function cmdPlugins() {
-  const client = await getClient();
-  const result = await client.graphql.query(PLUGIN_PACKAGES_QUERY, {});
-  console.log(JSON.stringify((result as any).pluginPackages, null, 2));
+  const client = await CaidoClient.getClient();
+  const plugins = await client.plugins();
+  console.log(JSON.stringify(plugins, null, 2));
 }
 
 export async function cmdHealth() {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const health = await client.health();
   console.log(JSON.stringify(health, null, 2));
 }
@@ -37,14 +25,10 @@ export async function cmdSetup(pat: string, url: string, proxy?: string) {
   console.log(`Connecting to ${url}...`);
 
   // Cache the access token under THIS instance's slot (clear any stale one first).
-  const setupCache = new SecretsTokenCache(url);
-  await setupCache.clear();
+  const instance = CaidoGlobalSettings.instance(url);
+  instance.clearCachedToken();
 
-  const client = new Client({
-    url,
-    auth: { pat, cache: setupCache },
-    logger: QUIET_LOGGER,
-  });
+  const client = CaidoClient.withAuth(instance, pat);
 
   try {
     await client.connect({
@@ -60,46 +44,45 @@ export async function cmdSetup(pat: string, url: string, proxy?: string) {
     process.exit(1);
   }
 
-  const viewer = await client.user.viewer();
+  const viewer = await client.viewer();
   console.log(
     `Authenticated as: ${(viewer as any).username || (viewer as any).id || JSON.stringify(viewer)}`,
   );
 
   // Persist PAT (+ proxy) under instances[url] and make it the active default.
   // The access token was already cached under instances[url] during connect.
-  upsertCaidoInstance(url, { pat, ...(proxy ? { proxy } : {}) }, true);
+  instance.update({ pat, ...(proxy ? { proxy } : {}) }, true);
 
-  console.log(`\nSaved to ${SECRETS_PATH} (instance: ${url})`);
+  console.log(`\nSaved to ${CaidoGlobalSettings.path} (instance: ${url})`);
   console.log(`PAT: ${pat.slice(0, 12)}...`);
   console.log(`Access token: cached`);
-  console.log(`Proxy (curl -x): ${resolveProxy()}`);
+  console.log(`Proxy (curl -x): ${instance.proxy()}`);
   console.log(
     `\nActive instance is now ${url}. Switch instances per shell with CAIDO_URL=<url>.`,
   );
 }
 
 export async function cmdAuthStatus() {
-  const url = resolveActiveUrl();
-  const root = readCaidoRoot();
-  const instance = getCaidoInstance(root, url);
+  const root = CaidoGlobalSettings.read();
+  const instance = CaidoGlobalSettings.activeInstance(root);
+  const url = instance.url;
+  const pat = instance.pat;
 
-  const hasPat = !!process.env.CAIDO_PAT || !!instance.pat;
-  const cachedTokenValid = isCachedTokenValid(instance);
+  const cachedTokenValid = instance.isCachedTokenValid();
   const cachedTokenExpiresAt = instance.cachedToken?.expiresAt ?? null;
-  const authMode = hasPat ? "pat" : cachedTokenValid ? "cached-token" : "none";
+  const authMode = pat ? "pat" : cachedTokenValid ? "cached-token" : "none";
 
   const base = {
     activeUrl: url,
     defaultUrl: root.default ?? null,
     configuredInstances: Object.keys(root.instances ?? {}),
     authMode,
-    hasPat,
     cachedTokenExpiresAt,
     cachedTokenValid,
-    proxy: resolveProxy(),
+    proxy: instance.proxy(),
   };
 
-  if (!hasPat && !cachedTokenValid) {
+  if (!pat && !cachedTokenValid) {
     console.log(
       JSON.stringify(
         {
@@ -114,19 +97,13 @@ export async function cmdAuthStatus() {
     return;
   }
 
-  const statusCache = new SecretsTokenCache(url);
-  const pat = process.env.CAIDO_PAT || instance.pat || "";
-  const client = new Client({
-    url,
-    auth: { pat, cache: statusCache },
-    logger: QUIET_LOGGER,
-  });
+  const client = CaidoClient.withAuth(instance, pat || "");
 
   try {
     await client.connect({
       ready: { retries: 2, timeout: 3000, interval: 1000 },
     });
-    const viewer = await client.user.viewer();
+    const viewer = await client.viewer();
     const health = await client.health();
     console.log(
       JSON.stringify(

@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import packageJson from "./package.json";
 
 const targets = [
   ["bun-darwin-arm64", "caido-client-macos-arm64"],
@@ -19,6 +20,9 @@ for (const [target, filename] of targets) {
       outfile: `./dist/${filename}`,
       autoloadDotenv: false,
     },
+    define: {
+      __CAIDO_CLIENT_VERSION__: JSON.stringify(packageJson.version),
+    },
     minify: true,
   });
 
@@ -28,4 +32,6 @@ for (const [target, filename] of targets) {
   }
 }
 
-console.log(`Built ${targets.length} standalone executables in dist/.`);
+console.log(
+  `Built ${targets.length} standalone caido-client v${packageJson.version} executables in dist/.`,
+);

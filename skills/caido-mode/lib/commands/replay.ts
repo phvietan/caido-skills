@@ -1,13 +1,7 @@
 /** Replay, Edit, Sessions, Collections, Automate/Fuzz commands */
 
-import { getClient } from "../client";
+import { CaidoClient } from "../client";
 import { decodeRaw, formatHttpRaw, splitRaw } from "../output";
-import {
-  CREATE_AUTOMATE_SESSION,
-  GET_AUTOMATE_SESSION,
-  START_AUTOMATE_TASK,
-  CREATE_REPLAY_SESSION_RAW,
-} from "../graphql";
 import type { OutputOpts } from "../types";
 import type { ConnectionInfoInput } from "@caido/sdk-client";
 
@@ -178,15 +172,15 @@ export function applyRawEdits(raw: string, edits: RawEdits): string {
 
 async function resolveSession(client: any, idOrName: string) {
   try {
-    const byId = await client.replay.sessions.get(idOrName);
+    const byId = await client.getReplaySession(idOrName);
     if (byId) return byId;
   } catch {}
 
   let after: string | undefined;
   while (true) {
     const page = after
-      ? await client.replay.sessions.list().after(after).first(100)
-      : await client.replay.sessions.list().first(100);
+      ? await client.listReplaySessions(after, 100)
+      : await client.listReplaySessions(undefined, 100);
 
     for (const edge of page.edges) {
       if (edge.node.name === idOrName) return edge.node;
@@ -212,8 +206,8 @@ async function resolveCollectionId(
   let after: string | undefined;
   while (true) {
     const page = after
-      ? await client.replay.collections.list().after(after).first(100)
-      : await client.replay.collections.list().first(100);
+      ? await client.listReplayCollections(after, 100)
+      : await client.listReplayCollections(undefined, 100);
 
     for (const edge of page.edges) {
       if (edge.node.id === idOrName || edge.node.name === idOrName)
@@ -252,7 +246,7 @@ async function applyNameChange(
   change: NameChange,
 ): Promise<string | undefined> {
   if (change.kind === "rename") {
-    await client.replay.sessions.rename(sessionId, change.name);
+    await client.renameReplaySession(sessionId, change.name);
     return change.name;
   }
   return current;
@@ -314,11 +308,7 @@ async function createRawReplaySession(
   };
   if (collectionId) input.collectionId = collectionId;
 
-  const createResult = await client.graphql.mutation(
-    CREATE_REPLAY_SESSION_RAW,
-    { input },
-  );
-  return (createResult as any).createReplaySession.session;
+  return client.createRawReplaySession(input);
 }
 
 // -- Replay --
@@ -331,8 +321,8 @@ export async function cmdReplay(
   overrides?: ConnectionOverrides,
   collectionRef?: string,
 ) {
-  const client = await getClient();
-  const original = await client.request.get(requestId, { raw: true });
+  const client = await CaidoClient.getClient();
+  const original = await client.getRequest(requestId);
   if (!original) {
     console.error(`Request ${requestId} not found`);
     process.exit(1);
@@ -341,8 +331,8 @@ export async function cmdReplay(
   const collectionId = await requireCollection(client, collectionRef);
   const createOpts: any = { requestSource: { id: requestId } };
   if (collectionId) createOpts.collectionId = collectionId;
-  const session = await client.replay.sessions.create(createOpts);
-  await client.replay.sessions.rename(session.id, name);
+  const session = await client.createReplaySession(createOpts);
+  await client.renameReplaySession(session.id, name);
 
   let raw = rawOverride
     ? await resolveRaw(rawOverride)
@@ -361,7 +351,7 @@ export async function cmdReplay(
     overrides,
   );
 
-  const result = await client.replay.send(session.id, { raw, connection });
+  const result = await client.sendReplay(session.id, { raw, connection });
   console.log(
     JSON.stringify(
       { sessionName: name, ...buildReplayOutput(session.id, result, opts) },
@@ -381,7 +371,7 @@ export async function cmdSendRaw(
   overrides?: ConnectionOverrides,
   collectionRef?: string,
 ) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   // Normalize header line endings once so the session and the sent bytes match.
   raw = ensureHeaderCrlf(await resolveRaw(raw));
 
@@ -393,9 +383,9 @@ export async function cmdSendRaw(
     connection,
     collectionId,
   );
-  await client.replay.sessions.rename(session.id, name);
+  await client.renameReplaySession(session.id, name);
 
-  const result = await client.replay.send(session.id, { raw, connection });
+  const result = await client.sendReplay(session.id, { raw, connection });
   console.log(
     JSON.stringify(
       { sessionName: name, ...buildReplayOutput(session.id, result, opts) },
@@ -418,8 +408,8 @@ export async function cmdEdit(
   opts: OutputOpts,
   overrides?: ConnectionOverrides,
 ) {
-  const client = await getClient();
-  const original = await client.request.get(requestId, { raw: true });
+  const client = await CaidoClient.getClient();
+  const original = await client.getRequest(requestId);
   if (!original) {
     console.error(`Request ${requestId} not found`);
     process.exit(1);
@@ -437,11 +427,11 @@ export async function cmdEdit(
   let sessionName: string | undefined;
   if (target.kind === "new") {
     const collectionId = await requireCollection(client, target.collectionRef);
-    const session = await client.replay.sessions.create({
+    const session = await client.createReplaySession({
       requestSource: { id: requestId },
       ...(collectionId ? { collectionId } : {}),
     });
-    await client.replay.sessions.rename(session.id, target.name);
+    await client.renameReplaySession(session.id, target.name);
     sessionId = session.id;
     sessionName = target.name;
   } else {
@@ -466,7 +456,7 @@ export async function cmdEdit(
     overrides,
   );
 
-  const result = await client.replay.send(sessionId, {
+  const result = await client.sendReplay(sessionId, {
     raw: modifiedRaw,
     connection,
   });
@@ -483,7 +473,7 @@ export async function cmdEdit(
 }
 
 export async function cmdGetSession(sessionIdOrName: string, opts: OutputOpts) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const session = await resolveSession(client, sessionIdOrName);
   if (!session) {
     console.error(`Replay session "${sessionIdOrName}" not found`);
@@ -498,7 +488,7 @@ export async function cmdGetSession(sessionIdOrName: string, opts: OutputOpts) {
   };
 
   if (session.activeEntryId) {
-    const entry = await client.replay.entries.get(session.activeEntryId);
+    const entry = await client.getReplayEntry(session.activeEntryId);
     if (entry) output.activeEntry = formatReplayEntry(entry, opts, true);
   }
 
@@ -511,19 +501,14 @@ export async function cmdReplayEntries(
   opts: OutputOpts,
   includeRaw: boolean,
 ) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const session = await resolveSession(client, sessionIdOrName);
   if (!session) {
     console.error(`Replay session "${sessionIdOrName}" not found`);
     process.exit(1);
   }
 
-  const connection = await session
-    .entries()
-    .includeRaw(
-      includeRaw ? { request: true, response: true, replay: true } : false,
-    )
-    .first(limit);
+  const connection = await client.listReplayEntries(session, includeRaw, limit);
 
   const results = connection.edges.map((e: any) =>
     formatReplayEntry(e.node, opts, includeRaw),
@@ -551,7 +536,7 @@ export async function cmdEditSession(
   opts: OutputOpts,
   overrides?: ConnectionOverrides,
 ) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const session = await resolveSession(client, sessionIdOrName);
   if (!session) {
     console.error(`Replay session "${sessionIdOrName}" not found`);
@@ -563,7 +548,7 @@ export async function cmdEditSession(
     process.exit(1);
   }
 
-  const entry = await client.replay.entries.get(session.activeEntryId);
+  const entry = await client.getReplayEntry(session.activeEntryId);
   if (!entry?.raw) {
     console.error(
       `Could not get raw data for active entry ${session.activeEntryId}`,
@@ -585,7 +570,7 @@ export async function cmdEditSession(
     overrides,
   );
 
-  const result = await client.replay.send(session.id, {
+  const result = await client.sendReplay(session.id, {
     raw: modifiedRaw,
     connection,
   });
@@ -688,14 +673,14 @@ async function paginateSdkList<T>(
 // -- Sessions --
 
 export async function cmdReplaySessions(limit?: number) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   // Sessions can't be sorted (SDK exposes no order field), so a single page can hide
   // recently-created sessions on later pages. Paginate fully (capped) by default.
   const { results, truncated } = await paginateSdkList(
-    (after, want) =>
+    ((after: string | undefined, want: number) =>
       after
-        ? client.replay.sessions.list().after(after).first(want)
-        : client.replay.sessions.list().first(want),
+        ? client.listReplaySessions(after, want)
+        : client.listReplaySessions(undefined, want)) as any,
     (n: any) => ({
       id: n.id,
       name: n.name,
@@ -722,13 +707,13 @@ export async function cmdCreateSession(
   name: string,
   collectionRef?: string,
 ) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const collectionId = await requireCollection(client, collectionRef);
-  const session = await client.replay.sessions.create({
+  const session = await client.createReplaySession({
     requestSource: { id: requestId },
     ...(collectionId ? { collectionId } : {}),
   });
-  await client.replay.sessions.rename(session.id, name);
+  await client.renameReplaySession(session.id, name);
   console.log(
     JSON.stringify(
       {
@@ -743,13 +728,13 @@ export async function cmdCreateSession(
 }
 
 export async function cmdRenameSession(sessionRef: string, name: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const session = await resolveSession(client, sessionRef);
   if (!session) {
     console.error(`Replay session "${sessionRef}" not found`);
     process.exit(1);
   }
-  await client.replay.sessions.rename(session.id, name);
+  await client.renameReplaySession(session.id, name);
   console.log(JSON.stringify({ id: session.id, name, renamed: true }, null, 2));
 }
 
@@ -757,14 +742,14 @@ export async function cmdMoveSession(
   sessionRef: string,
   collectionRef: string,
 ) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const session = await resolveSession(client, sessionRef);
   if (!session) {
     console.error(`Replay session "${sessionRef}" not found`);
     process.exit(1);
   }
   const collectionId = await requireCollection(client, collectionRef);
-  const moved = await client.replay.sessions.move(session.id, collectionId!);
+  const moved = await client.moveReplaySession(session.id, collectionId!);
   console.log(
     JSON.stringify(
       {
@@ -780,20 +765,20 @@ export async function cmdMoveSession(
 }
 
 export async function cmdDeleteSessions(ids: string[]) {
-  const client = await getClient();
-  await client.replay.sessions.delete(ids);
+  const client = await CaidoClient.getClient();
+  await client.deleteReplaySessions(ids);
   console.log(JSON.stringify({ deleted: ids }, null, 2));
 }
 
 // -- Collections --
 
 export async function cmdReplayCollections(limit?: number) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const { results, truncated } = await paginateSdkList(
-    (after, want) =>
+    ((after: string | undefined, want: number) =>
       after
-        ? client.replay.collections.list().after(after).first(want)
-        : client.replay.collections.list().first(want),
+        ? client.listReplayCollections(after, want)
+        : client.listReplayCollections(undefined, want)) as any,
     (n: any) => ({ id: n.id, name: n.name }),
     limit,
   );
@@ -811,48 +796,41 @@ export async function cmdReplayCollections(limit?: number) {
 }
 
 export async function cmdCreateCollection(name: string) {
-  const client = await getClient();
-  const collection = await client.replay.collections.create({ name });
+  const client = await CaidoClient.getClient();
+  const collection = await client.createReplayCollection(name);
   console.log(
     JSON.stringify({ id: collection.id, name: collection.name }, null, 2),
   );
 }
 
 export async function cmdRenameCollection(collectionRef: string, name: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const collectionId = await requireCollection(client, collectionRef);
-  await client.replay.collections.rename(collectionId!, name);
+  await client.renameReplayCollection(collectionId!, name);
   console.log(
     JSON.stringify({ id: collectionId, name, renamed: true }, null, 2),
   );
 }
 
 export async function cmdDeleteCollection(collectionRef: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   const collectionId = await requireCollection(client, collectionRef);
-  await client.replay.collections.delete(collectionId!);
+  await client.deleteReplayCollection(collectionId!);
   console.log(JSON.stringify({ deleted: collectionId }, null, 2));
 }
 
 // -- Automate / Fuzz --
 
 export async function cmdCreateAutomateSession(requestId: string) {
-  const client = await getClient();
-  const result = await client.graphql.mutation(CREATE_AUTOMATE_SESSION, {
-    input: { requestSource: { id: requestId } },
-  });
-  console.log(
-    JSON.stringify((result as any).createAutomateSession.session, null, 2),
-  );
+  const client = await CaidoClient.getClient();
+  const session = await client.createAutomateSession(requestId);
+  console.log(JSON.stringify(session, null, 2));
 }
 
 export async function cmdFuzz(sessionId: string, payloads: string[]) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
 
-  const check = await client.graphql.query(GET_AUTOMATE_SESSION, {
-    id: sessionId,
-  });
-  const session = (check as any).automateSession;
+  const session = await client.getAutomateSession(sessionId);
   if (!session) {
     console.error(`Automate session ${sessionId} not found`);
     process.exit(1);
@@ -869,10 +847,7 @@ export async function cmdFuzz(sessionId: string, payloads: string[]) {
     ),
   );
 
-  const startResult = await client.graphql.mutation(START_AUTOMATE_TASK, {
-    automateSessionId: sessionId,
-  });
-  const task = (startResult as any).startAutomateTask.automateTask;
+  const task = await client.startAutomateTask(sessionId);
 
   console.log(
     JSON.stringify(

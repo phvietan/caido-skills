@@ -1,10 +1,10 @@
 /** Findings commands: list, get, create, update */
 
-import { getClient } from "../client";
+import { CaidoClient } from "../client";
 
 export async function cmdFindings(limit: number) {
-  const client = await getClient();
-  const connection = await client.finding.list().first(limit);
+  const client = await CaidoClient.getClient();
+  const connection = await client.listFindings(limit);
 
   const results = connection.edges.map((e) => ({
     id: e.node.id,
@@ -21,8 +21,8 @@ export async function cmdFindings(limit: number) {
 }
 
 export async function cmdGetFinding(findingId: string) {
-  const client = await getClient();
-  const finding = await client.finding.get(findingId);
+  const client = await CaidoClient.getClient();
+  const finding = await client.getFinding(findingId);
 
   if (!finding) {
     console.error(`Finding ${findingId} not found`);
@@ -39,8 +39,8 @@ export async function cmdCreateFinding(
   reporter?: string,
   dedupeKey?: string,
 ) {
-  const client = await getClient();
-  const finding = await client.finding.create(requestId, {
+  const client = await CaidoClient.getClient();
+  const finding = await client.createFinding(requestId, {
     title,
     reporter: reporter || "caido-mode",
     description,
@@ -56,15 +56,15 @@ export async function cmdUpdateFinding(
   description?: string,
   hidden?: boolean,
 ) {
-  const client = await getClient();
-  const existing = await client.finding.get(findingId);
+  const client = await CaidoClient.getClient();
+  const existing = await client.getFinding(findingId);
 
   if (!existing) {
     console.error(`Finding ${findingId} not found`);
     process.exit(1);
   }
 
-  const finding = await client.finding.update(findingId, {
+  const finding = await client.updateFinding(findingId, {
     title: title ?? existing.title,
     description: description ?? existing.description ?? "",
     hidden: hidden ?? existing.hidden,

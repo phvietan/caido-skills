@@ -1,12 +1,12 @@
 /** Management commands: scopes, filters, environments, projects, hosted files, tasks */
 
-import { getClient } from "../client";
+import { CaidoClient } from "../client";
 
 // ── Scopes ──
 
 export async function cmdScopes() {
-  const client = await getClient();
-  const scopes = await client.scope.list();
+  const client = await CaidoClient.getClient();
+  const scopes = await client.listScopes();
   console.log(JSON.stringify(scopes, null, 2));
 }
 
@@ -15,8 +15,8 @@ export async function cmdCreateScope(
   allow: string[],
   deny: string[],
 ) {
-  const client = await getClient();
-  const scope = await client.scope.create({
+  const client = await CaidoClient.getClient();
+  const scope = await client.createScope({
     name,
     allowlist: allow,
     denylist: deny,
@@ -30,15 +30,15 @@ export async function cmdUpdateScope(
   allow?: string[],
   deny?: string[],
 ) {
-  const client = await getClient();
-  const existing = await client.scope.get(scopeId);
+  const client = await CaidoClient.getClient();
+  const existing = await client.getScope(scopeId);
 
   if (!existing) {
     console.error(`Scope ${scopeId} not found`);
     process.exit(1);
   }
 
-  const scope = await client.scope.update(scopeId, {
+  const scope = await client.updateScope(scopeId, {
     name: name ?? existing.name,
     allowlist: allow ?? existing.allowlist,
     denylist: deny ?? existing.denylist,
@@ -47,16 +47,16 @@ export async function cmdUpdateScope(
 }
 
 export async function cmdDeleteScope(scopeId: string) {
-  const client = await getClient();
-  await client.scope.delete(scopeId);
+  const client = await CaidoClient.getClient();
+  await client.deleteScope(scopeId);
   console.log(JSON.stringify({ deleted: scopeId }, null, 2));
 }
 
 // ── Filters ──
 
 export async function cmdFilters() {
-  const client = await getClient();
-  const filters = await client.filter.list();
+  const client = await CaidoClient.getClient();
+  const filters = await client.listFilters();
   console.log(JSON.stringify(filters, null, 2));
 }
 
@@ -65,11 +65,11 @@ export async function cmdCreateFilter(
   query: string,
   alias?: string,
 ) {
-  const client = await getClient();
-  const filter = await client.filter.create({
+  const client = await CaidoClient.getClient();
+  const filter = await client.createFilter({
     name,
     clause: query,
-    alias,
+    alias: alias ?? "",
   });
   console.log(JSON.stringify(filter, null, 2));
 }
@@ -80,15 +80,15 @@ export async function cmdUpdateFilter(
   query?: string,
   alias?: string,
 ) {
-  const client = await getClient();
-  const existing = await client.filter.get(filterId);
+  const client = await CaidoClient.getClient();
+  const existing = await client.getFilter(filterId);
 
   if (!existing) {
     console.error(`Filter ${filterId} not found`);
     process.exit(1);
   }
 
-  const filter = await client.filter.update(filterId, {
+  const filter = await client.updateFilter(filterId, {
     name: name ?? existing.name,
     clause: query ?? existing.clause,
     alias: alias ?? existing.alias,
@@ -97,36 +97,36 @@ export async function cmdUpdateFilter(
 }
 
 export async function cmdDeleteFilter(filterId: string) {
-  const client = await getClient();
-  await client.filter.delete(filterId);
+  const client = await CaidoClient.getClient();
+  await client.deleteFilter(filterId);
   console.log(JSON.stringify({ deleted: filterId }, null, 2));
 }
 
 // ── Environments ──
 
 export async function cmdEnvs() {
-  const client = await getClient();
-  const envs = await client.environment.list();
+  const client = await CaidoClient.getClient();
+  const envs = await client.listEnvironments();
   console.log(JSON.stringify(envs, null, 2));
 }
 
 export async function cmdCreateEnv(name: string) {
-  const client = await getClient();
+  const client = await CaidoClient.getClient();
   // SDK's environment.create calls `options.variables.map(...)` and the
   // schema requires a non-null variables list, so pass an empty array.
-  const env = await client.environment.create({ name, variables: [] });
+  const env = await client.createEnvironment({ name, variables: [] });
   console.log(JSON.stringify({ id: env.id, name: env.name }, null, 2));
 }
 
 export async function cmdSelectEnv(envId?: string) {
-  const client = await getClient();
-  await client.environment.select(envId);
+  const client = await CaidoClient.getClient();
+  await client.selectEnvironment(envId);
   console.log(JSON.stringify({ selected: envId || null }, null, 2));
 }
 
 export async function cmdEnvSet(envId: string, varName: string, value: string) {
-  const client = await getClient();
-  const env = await client.environment.get(envId);
+  const client = await CaidoClient.getClient();
+  const env = await client.getEnvironment(envId);
 
   if (!env) {
     console.error(`Environment ${envId} not found`);
@@ -156,49 +156,49 @@ export async function cmdEnvSet(envId: string, varName: string, value: string) {
 }
 
 export async function cmdDeleteEnv(envId: string) {
-  const client = await getClient();
-  await client.environment.delete(envId);
+  const client = await CaidoClient.getClient();
+  await client.deleteEnvironment(envId);
   console.log(JSON.stringify({ deleted: envId }, null, 2));
 }
 
 // ── Projects ──
 
 export async function cmdProjects() {
-  const client = await getClient();
-  const projects = await client.project.list();
+  const client = await CaidoClient.getClient();
+  const projects = await client.listProjects();
   console.log(JSON.stringify(projects, null, 2));
 }
 
 export async function cmdSelectProject(projectId: string) {
-  const client = await getClient();
-  await client.project.select(projectId);
+  const client = await CaidoClient.getClient();
+  await client.selectProject(projectId);
   console.log(JSON.stringify({ selected: projectId }, null, 2));
 }
 
 // ── Hosted Files ──
 
 export async function cmdHostedFiles() {
-  const client = await getClient();
-  const files = await client.hostedFile.list();
+  const client = await CaidoClient.getClient();
+  const files = await client.listHostedFiles();
   console.log(JSON.stringify(files, null, 2));
 }
 
 export async function cmdDeleteHostedFile(fileId: string) {
-  const client = await getClient();
-  await client.hostedFile.delete(fileId);
+  const client = await CaidoClient.getClient();
+  await client.deleteHostedFile(fileId);
   console.log(JSON.stringify({ deleted: fileId }, null, 2));
 }
 
 // ── Tasks ──
 
 export async function cmdTasks() {
-  const client = await getClient();
-  const tasks = await client.task.list();
+  const client = await CaidoClient.getClient();
+  const tasks = await client.listTasks();
   console.log(JSON.stringify(tasks, null, 2));
 }
 
 export async function cmdCancelTask(taskId: string) {
-  const client = await getClient();
-  await client.task.cancel(taskId);
+  const client = await CaidoClient.getClient();
+  await client.cancelTask(taskId);
   console.log(JSON.stringify({ cancelled: taskId }, null, 2));
 }

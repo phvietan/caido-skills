@@ -1,6 +1,7 @@
 /** HTTP History commands: search, recent, get, get-response, raw, export-curl */
 
-import { getClient, resolveProxy } from "../client";
+import { CaidoClient } from "../client";
+import { CaidoGlobalSettings } from "../settings";
 import {
   decodeRaw,
   formatHttpRaw,
@@ -32,17 +33,13 @@ export async function cmdSearch(
   desc: boolean = true,
   compact?: boolean,
 ) {
-  const client = await getClient();
-  let builder = client.request.list().filter(filter).first(limit);
+  const client = await CaidoClient.getClient();
   // The SDK's list() defaults to ASCENDING by id (oldest first), so .first(limit)
   // would return the oldest N matches. We default to descending (newest first) —
   // the near-universal intent — so callers get the latest traffic without a
   // client-side sort (which, on a truncated result set, silently misses newer
   // requests beyond the limit). Pass desc=false (CLI --asc/--oldest) for oldest-first.
-  if (desc) builder = builder.descending("req", "id");
-  if (after) builder = builder.after(after);
-
-  const connection = await builder;
+  const connection = await client.searchRequests(filter, limit, desc, after);
 
   if (idsOnly) {
     const ids = connection.edges.map((e) => e.node.request.id);
@@ -87,11 +84,8 @@ export async function cmdSearch(
 }
 
 export async function cmdRecent(limit: number, compact?: boolean) {
-  const client = await getClient();
-  const connection = await client.request
-    .list()
-    .descending("req", "id")
-    .first(limit);
+  const client = await CaidoClient.getClient();
+  const connection = await client.recentRequests(limit);
 
   const results = connection.edges.map((e) => ({
     id: e.node.request.id,
@@ -114,8 +108,8 @@ export async function cmdRecent(limit: number, compact?: boolean) {
 }
 
 export async function cmdGet(requestId: string, opts: OutputOpts) {
-  const client = await getClient();
-  const result = await client.request.get(requestId, { raw: true });
+  const client = await CaidoClient.getClient();
+  const result = await client.getRequest(requestId);
 
   if (!result) {
     console.error(`Request ${requestId} not found`);
@@ -151,8 +145,8 @@ export async function cmdGet(requestId: string, opts: OutputOpts) {
 }
 
 export async function cmdGetResponse(requestId: string, opts: OutputOpts) {
-  const client = await getClient();
-  const result = await client.request.get(requestId, {
+  const client = await CaidoClient.getClient();
+  const result = await client.getRequest(requestId, {
     requestRaw: false,
     responseRaw: true,
   });
@@ -189,8 +183,8 @@ export async function cmdRaw(
   requestId: string,
   opts: { out?: string; response?: boolean },
 ) {
-  const client = await getClient();
-  const result = await client.request.get(requestId, { raw: true });
+  const client = await CaidoClient.getClient();
+  const result = await client.getRequest(requestId);
 
   if (!result) {
     console.error(`Request ${requestId} not found`);
@@ -218,8 +212,8 @@ export async function cmdRaw(
 }
 
 export async function cmdExportCurl(requestId: string) {
-  const client = await getClient();
-  const result = await client.request.get(requestId, { raw: true });
+  const client = await CaidoClient.getClient();
+  const result = await client.getRequest(requestId);
 
   if (!result) {
     console.error(`Request ${requestId} not found`);
@@ -395,8 +389,8 @@ export async function cmdExportCurlConfig(
   requestId: string,
   opts: { out?: string; cookieJar?: boolean; exclude?: string[] } = {},
 ) {
-  const client = await getClient();
-  const result = await client.request.get(requestId, { raw: true });
+  const client = await CaidoClient.getClient();
+  const result = await client.getRequest(requestId);
   if (!result) {
     console.error(`Request ${requestId} not found`);
     process.exit(1);
@@ -417,7 +411,8 @@ export async function cmdExportCurlConfig(
   const dir = dirname(cfgPath);
   const jarPath = join(dir, "cookies.txt");
 
-  const built = buildAuthConfig(raw, host, port, isTls, resolveProxy(), {
+  const proxy = CaidoGlobalSettings.activeInstance().proxy();
+  const built = buildAuthConfig(raw, host, port, isTls, proxy, {
     cookieJar: opts.cookieJar ? jarPath : undefined,
     exclude: opts.exclude,
   });
@@ -435,7 +430,7 @@ export async function cmdExportCurlConfig(
         cookieCount: built.cookieCount,
         capturedHeaders: built.included,
         base: built.base,
-        proxy: resolveProxy(),
+        proxy,
         note: "Faithful static snapshot for INTERNAL testing. Cookies are inline+static (no drift); refresh by regenerating from a fresh request. For the user, always emit a FULL self-contained command via `export-curl`.",
         usage: `curl -K ${cfgPath} "${built.base}/path"`,
       },

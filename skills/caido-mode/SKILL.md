@@ -16,11 +16,11 @@ There are **two distinct modes**:
 
 1. **Testing → use `curl`, always proxied through Caido.** Find a real authenticated request in
    history, cache its auth into a reusable curl config (a faithful static snapshot of its headers
-   + cookies), then probe with `curl -K auth.cfg "$BASE/path"`. **All traffic must go through
-   Caido** (the config carries the
-   proxy), so every request lands in HTTP history.
+   - cookies), then probe with `curl -K auth.cfg "$BASE/path"`. **All traffic must go through
+     Caido** (the config carries the
+     proxy), so every request lands in HTTP history.
 2. **Handoff → use replay sessions + collections.** Only when handing a request (or a set) to the
-   *user* do you materialize it as a named replay session inside a named collection.
+   _user_ do you materialize it as a named replay session inside a named collection.
 
 Hard rules:
 
@@ -28,10 +28,10 @@ Hard rules:
   target request directly; always via the Caido proxy (the generated config does this; otherwise add
   `-x <proxy>`). **The one exception:** don't proxy bruteforce/fuzzing tools (`ffuf`, etc.) or any
   batch of **100+ requests at once** through Caido — it bloats HTTP history. Run those **direct** (no
-  `-x`), then bring any interesting hit *back* into Caido (re-send it through the proxy / promote to
+  `-x`), then bring any interesting hit _back_ into Caido (re-send it through the proxy / promote to
   Replay) to investigate and hand off.
 - **Test with `curl`.** Don't spin up replay sessions for probing — that's handoff only.
-- **To show the operator a request, send it to Replay.** Whenever you want the operator to *see* a
+- **To show the operator a request, send it to Replay.** Whenever you want the operator to _see_ a
   specific request, create a **named replay session** for it (in a named collection if there's more
   than one) — that's how they inspect and re-run it in Caido. A request you tested via curl only
   becomes something the operator can work with once you promote it into Replay
@@ -73,7 +73,7 @@ Confirm a probe landed in Caido with `search 'req.host.cont:"target.com"' --comp
 ### Send the path exactly as written
 
 When testing **path traversal / path-normalization** (`../`, `/..`, `/./`, encoded variants), pass
-**`curl --path-as-is`** — otherwise curl collapses `../` and `/./` *client-side* before sending, so
+**`curl --path-as-is`** — otherwise curl collapses `../` and `/./` _client-side_ before sending, so
 the server never sees the payload and the test silently passes. Keep the path verbatim:
 
 ```bash
@@ -101,7 +101,7 @@ hard way:
     `400`/`403`. curl sets `Content-Length` itself; don't add it.
 - **Static cookies, no jar.** It does **not** use `cookie-jar` by default, so curl never writes a
   response's rotated `Set-Cookie` back over your captured-good cookies (servers like Google rotate
-  on *every* response, including error responses — a write-back jar drifts the session into
+  on _every_ response, including error responses — a write-back jar drifts the session into
   failure). Need to follow rotation? `export-curl <id> --config --cookie-jar` opts in.
 
 To drop a specific header: `--exclude <name>` (repeatable). To omit cookies entirely (e.g. when a
@@ -112,7 +112,7 @@ Match & Replace rule injects auth): `--exclude cookie`.
 - **Per-target scratch dir:** `<OS temp>/caido/<host>/` holds `auth.cfg`, body files, notes.
 - **`$BASE`:** set `BASE=https://<host>` once; write requests as `"$BASE/path"`.
 - **Bodies in files:** save large/complex bodies once and send with `--data-binary @body.json`
-  (the correct use of `--data-binary` — a byte-exact *body*). Add `-H 'Content-Type: …'` per
+  (the correct use of `--data-binary` — a byte-exact _body_). Add `-H 'Content-Type: …'` per
   request since the config omits it.
 - **Lazy refresh:** the snapshot is static, so when a request starts returning **401/403** (token
   expired / cookies aged out), re-run `export-curl <fresh-id> --config` to re-snapshot, then retry.
@@ -124,7 +124,7 @@ Match & Replace rule injects auth): `--exclude cookie`.
 
 ### Giving commands to the user
 
-To surface a request *inside Caido* for the operator, send it to **Replay** (see "Replay sessions"
+To surface a request _inside Caido_ for the operator, send it to **Replay** (see "Replay sessions"
 below) — that's the default. This section is for the other case: handing them a runnable **command**
 (a PoC, or something to run outside Caido). Then **always produce a full, self-contained curl** —
 every header inline, no `-K`:
@@ -176,7 +176,8 @@ bun run caido-client.ts health             # verify instance is up
 ```
 
 `setup` validates the PAT via the SDK's device-code flow (auto-approved by the PAT), then caches
-the PAT + access token (+ proxy) to `~/.claude/config/secrets.json`. Subsequent runs use the
+the PAT + access token (+ proxy) to `~/.config/caido-client/settings.json`. Override it with
+`CAIDO_SETTINGS_PATH`; legacy Claude-path credentials are imported automatically. Subsequent runs use the
 cached token; a valid cached token works even without the PAT.
 
 ### Multiple Caido instances
@@ -243,7 +244,7 @@ bun run caido-client.ts send-raw --host target.com --raw @/tmp/req.txt --name "c
 
 ### Editing a session forces name intent
 
-If the user asks you to test *inside* Replay, use `edit` / `edit-session`. Because an edit changes
+If the user asks you to test _inside_ Replay, use `edit` / `edit-session`. Because an edit changes
 what a session contains, declare what happens to its **name** — pass exactly one of
 `--no-name-change` (`--nonach`) or `--new-name "<name>"`:
 
@@ -284,13 +285,13 @@ bun run caido-client.ts create-collection "Swagger - petstore.yaml"
 bun run caido-client.ts rename-collection "old name" "new name"
 ```
 
-| Situation | Collection decision |
-|-----------|--------------------|
-| **One** request reproduced for the user | Default collection — **don't** create one. Name the session and tell the user the name. |
-| A replay tab per endpoint in a **JS file** | New collection `JS File Endpoints`. |
-| A replay tab per endpoint in a **Swagger spec** | New collection `Swagger - <filename>`. |
-| A **multi-request chain** for a vuln | New collection `Vuln chain - <description>`, steps named `1. …`, `2. …`. |
-| All endpoints under **`/api/v2`** | New collection `/api/v2/*`. |
+| Situation                                       | Collection decision                                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **One** request reproduced for the user         | Default collection — **don't** create one. Name the session and tell the user the name. |
+| A replay tab per endpoint in a **JS file**      | New collection `JS File Endpoints`.                                                     |
+| A replay tab per endpoint in a **Swagger spec** | New collection `Swagger - <filename>`.                                                  |
+| A **multi-request chain** for a vuln            | New collection `Vuln chain - <description>`, steps named `1. …`, `2. …`.                |
+| All endpoints under **`/api/v2`**               | New collection `/api/v2/*`.                                                             |
 
 Pass collections by **name**; the CLI resolves it (and tells you to create it first if missing):
 
@@ -312,23 +313,24 @@ curl commands don't carry it — add a rule that sets `Authorization` on every p
 A rule is one **section** (which part) × one **operation** × a **matcher** × a **replacer**, with
 optional **condition** (HTTPQL scope) and **sources**:
 
-| Piece | Choices |
-|------|---------|
-| **section** | req: `req-method req-path req-query req-body req-first-line req-header req-all req-sni` · resp: `resp-body resp-status resp-first-line resp-header resp-all` · ws: `ws-up ws-down` |
-| **operation** | `raw` (match within the section) · `update`/`add`/`remove` (header & query only, by name) · method/status only `update` |
-| **matcher** | `--match-value <str>` · `--match-regex <re>` · `--match-full` (whole section) · `--match-name <n>` (header/query update/add/remove) |
-| **replacer** | `--replace <term>` (literal; `""` allowed) · `--workflow <id>` (run a workflow) |
-| **condition** | `--condition '<httpql>'` — only apply when the request matches (e.g. one host) |
-| **sources** | `--sources INTERCEPT,REPLAY,…` — which traffic it applies to |
+| Piece         | Choices                                                                                                                                                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **section**   | req: `req-method req-path req-query req-body req-first-line req-header req-all req-sni` · resp: `resp-body resp-status resp-first-line resp-header resp-all` · ws: `ws-up ws-down` |
+| **operation** | `raw` (match within the section) · `update`/`add`/`remove` (header & query only, by name) · method/status only `update`                                                            |
+| **matcher**   | `--match-value <str>` · `--match-regex <re>` · `--match-full` (whole section) · `--match-name <n>` (header/query update/add/remove)                                                |
+| **replacer**  | `--replace <term>` (literal; `""` allowed) · `--workflow <id>` (run a workflow)                                                                                                    |
+| **condition** | `--condition '<httpql>'` — only apply when the request matches (e.g. one host)                                                                                                     |
+| **sources**   | `--sources INTERCEPT,REPLAY,…` — which traffic it applies to                                                                                                                       |
 
 Four gotchas, all defaulted for you:
+
 - **New rules are created DISABLED.** Enable with `toggle-mr-rule <id> --on`.
 - **Default collection** is Caido's "Default Collection" (override with `--collection <name|id>`).
 - **Default sources** is `INTERCEPT` (proxy traffic), matching Caido. Add `--sources` to broaden.
 - **JS targets — pick matcher based on what you're matching against.** `--match-value` is fine for stable literals (string constants, JSON keys, fixed API paths). Use `--match-regex` when matching near minified identifiers: symbol names rotate on every bundle deploy (e.g. `_.ex` → `_.Ww`), so a literal rule silently stops matching with no error. Anchor the regex to structurally stable neighbours — surrounding string literals, known function names, fixed JSON keys — rather than the minified identifier itself.
 
-**Preview before committing:** `test-mr-rule` applies a rule to a raw request *without creating
-anything* — use it to confirm a rule does what you expect.
+**Preview before committing:** `test-mr-rule` applies a rule to a raw request _without creating
+anything_ — use it to confirm a rule does what you expect.
 
 ```bash
 # Preview: would this add the header correctly?
@@ -361,13 +363,13 @@ Manage collections with `mr-collections`, `create-mr-collection`, `rename-mr-col
 
 ## Output control (works with `get`, `get-response`, `replay`, `edit`, `send-raw`, `edit-session`)
 
-| Flag | Description |
-|------|-------------|
-| `--max-body <n>` | Max response body lines (default 200, 0 = unlimited) |
-| `--max-body-chars <n>` | Max body chars (default 5000, 0 = unlimited) |
-| `--no-request` | Omit the request raw from output |
-| `--headers-only` | Headers only, no body |
-| `--compact` | Shorthand: `--no-request --max-body 50 --max-body-chars 5000` |
+| Flag                   | Description                                                   |
+| ---------------------- | ------------------------------------------------------------- |
+| `--max-body <n>`       | Max response body lines (default 200, 0 = unlimited)          |
+| `--max-body-chars <n>` | Max body chars (default 5000, 0 = unlimited)                  |
+| `--no-request`         | Omit the request raw from output                              |
+| `--headers-only`       | Headers only, no body                                         |
+| `--compact`            | Shorthand: `--no-request --max-body 50 --max-body-chars 5000` |
 
 ---
 
@@ -378,30 +380,31 @@ Caido's query language for searching HTTP history.
 **CRITICAL**: String values MUST be quoted; integers are NOT.
 
 **CRITICAL**: HTTPQL has NO `NOT` operator. Use the negated operator variant instead:
+
 - `ncont` (not contains), `nlike`, `nregex`, `ne` (not equals)
 - Wrong: `NOT req.path.cont:"/admin"` — Right: `req.path.ncont:"/admin"`
 
 ### Namespaces and Fields
 
-| Namespace | Field | Type | Description |
-|-----------|-------|------|-------------|
-| `req` | `ext` | string | File extension (includes `.`) |
-| `req` | `host` | string | Hostname |
-| `req` | `method` | string | HTTP method (uppercase) |
-| `req` | `path` | string | URL path |
-| `req` | `query` | string | Query string |
-| `req` | `raw` | string | Full raw request |
-| `req` | `port` | int | Port number |
-| `req` | `len` | int | Request body length |
-| `req` | `created_at` | date | Creation timestamp |
-| `req` | `tls` | bool | Is HTTPS |
-| `resp` | `raw` | string | Full raw response |
-| `resp` | `code` | int | Status code |
-| `resp` | `len` | int | Response body length |
-| `resp` | `roundtrip` | int | Roundtrip time (ms) |
-| `row` | `id` | int | Request ID |
-| `source` | - | special | `"intercept"`, `"replay"`, `"automate"`, `"workflow"` |
-| `preset` | - | special | Filter preset reference |
+| Namespace | Field        | Type    | Description                                           |
+| --------- | ------------ | ------- | ----------------------------------------------------- |
+| `req`     | `ext`        | string  | File extension (includes `.`)                         |
+| `req`     | `host`       | string  | Hostname                                              |
+| `req`     | `method`     | string  | HTTP method (uppercase)                               |
+| `req`     | `path`       | string  | URL path                                              |
+| `req`     | `query`      | string  | Query string                                          |
+| `req`     | `raw`        | string  | Full raw request                                      |
+| `req`     | `port`       | int     | Port number                                           |
+| `req`     | `len`        | int     | Request body length                                   |
+| `req`     | `created_at` | date    | Creation timestamp                                    |
+| `req`     | `tls`        | bool    | Is HTTPS                                              |
+| `resp`    | `raw`        | string  | Full raw response                                     |
+| `resp`    | `code`       | int     | Status code                                           |
+| `resp`    | `len`        | int     | Response body length                                  |
+| `resp`    | `roundtrip`  | int     | Roundtrip time (ms)                                   |
+| `row`     | `id`         | int     | Request ID                                            |
+| `source`  | -            | special | `"intercept"`, `"replay"`, `"automate"`, `"workflow"` |
+| `preset`  | -            | special | Filter preset reference                               |
 
 ### Operators
 
@@ -430,6 +433,7 @@ preset:"My Filter"                              # saved filter preset
 ## Other capabilities (reference)
 
 ### Findings — surface in Caido's Findings tab
+
 ```bash
 bun run caido-client.ts findings --limit 50
 bun run caido-client.ts create-finding 8431 --title "IDOR on /api/user/:id" \
@@ -438,6 +442,7 @@ bun run caido-client.ts update-finding <id> --title "…" --description "…"
 ```
 
 ### Scopes / Filter presets / Environments
+
 ```bash
 bun run caido-client.ts create-scope "Target" --allow "*.target.com" --deny "*.cdn.target.com"
 bun run caido-client.ts create-filter "API 4xx" --query 'req.path.cont:"/api/" AND resp.code.gte:400' --alias "api4xx"
@@ -446,6 +451,7 @@ bun run caido-client.ts create-env "IDOR-Test"; bun run caido-client.ts env-set 
 ```
 
 ### Fuzzing / intercept / projects / tasks / info
+
 ```bash
 bun run caido-client.ts create-automate-session 8431   # configure payloads in UI, then: fuzz <session-id>
 bun run caido-client.ts intercept-status | intercept-enable | intercept-disable
@@ -459,41 +465,42 @@ bun run caido-client.ts projects ; bun run caido-client.ts viewer ; bun run caid
 Every command (run `bun run caido-client.ts <command>`). Sessions/collections accept a **name or
 id**; output is JSON unless noted. Run `--help` for full flag lists.
 
-| Command | What it does |
-|---|---|
-| **History & testing** | |
-| `search <httpql>` | Search history, **newest first**. `--limit --after --ids-only --asc/--oldest --compact` |
-| `recent` | Newest requests. `--limit --compact` |
-| `get <id>` / `get-response <id>` | Full request / just the response (output-control flags) |
-| `raw <id>` | Dump byte-exact raw request. `--out <file> --response` |
-| `export-curl <id>` | Full self-contained curl (for the user) |
-| `export-curl <id> --config` | Reusable `-K` config — faithful static snapshot of all auth headers + inline cookies (internal). `--out <file>` · `--cookie-jar` (follow rotation) · `--exclude <h>` |
-| **Send / edit** | |
-| `replay <id> --name <n>` | Replay into a new named session. `--raw --collection` + connection overrides |
-| `send-raw --host <h> --raw <s\|@file\|-> --name <n>` | Send a raw request via a new named session. `--port --tls/--no-tls --collection` |
-| `edit <id>` | Edit + send into replay. `--method --path --set-header --remove-header --body --replace --session --name/--new-name/--nonach --collection` |
-| `edit-session <name\|id>` | Edit + send from a session's active entry (requires `--nonach` or `--new-name`) |
-| **Replay tab lookup** | |
-| `get-session <name\|id>` | Session + active entry. `--compact` |
-| `replay-entries <name\|id>` | Request history in a tab (alias `session-entries`). `--limit --raw` |
-| **Sessions** | |
-| `create-session <id> --name <n>` | New named session from a request. `--collection` |
-| `rename-session <name\|id> <new>` · `move-session <s> <collection>` | Rename / move |
-| `sessions` (alias `replay-sessions`) · `delete-sessions <id,id,…>` | List / delete |
-| **Collections** | |
-| `collections` (alias `replay-collections`) | List collections |
-| `create-collection <name>` · `rename-collection <c> <new>` · `delete-collection <name\|id>` | Create / rename / delete |
-| **Fuzzing** | `create-automate-session <id>` · `fuzz <session-id>` (configure payloads in UI) |
-| **Findings** | `findings` · `get-finding <id>` · `create-finding <id> --title …` · `update-finding <id>` |
-| **Scopes** | `scopes` · `create-scope <name> --allow --deny` · `update-scope <id>` · `delete-scope <id>` |
-| **Filters** | `filters` · `create-filter <name> --query [--alias]` · `update-filter <id>` · `delete-filter <id>` |
-| **Environments** | `envs` · `create-env <name>` · `env-set <env> <var> <val>` · `select-env [id]` · `delete-env <id>` |
-| **Projects** | `projects` · `select-project <id>` |
-| **Tasks** | `tasks` · `cancel-task <id>` |
-| **Hosted files** | `hosted-files` · `delete-hosted-file <id>` |
-| **Intercept** | `intercept-status` · `intercept-enable` · `intercept-disable` |
-| **Match & Replace** | `mr-rules` · `mr-collections` · `create-mr-rule --section … [--operation] [--match-*] [--replace/--workflow] [--name --collection --condition --sources]` · `test-mr-rule --raw … --section …` (preview, no-op) · `toggle-mr-rule <id> --on\|--off` · `rename-mr-rule <id> <n>` · `move-mr-rule <id> <coll>` · `update-mr-rule <id> …` · `delete-mr-rule <id>` · `create-mr-collection <n>` · `rename-mr-collection <c> <n>` · `delete-mr-collection <c>` |
-| **Info / auth** | `viewer` · `plugins` · `health` · `setup <pat> [url] [--proxy]` · `auth-status` |
+| Command                                                                                     | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **History & testing**                                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `search <httpql>`                                                                           | Search history, **newest first**. `--limit --after --ids-only --asc/--oldest --compact`                                                                                                                                                                                                                                                                                                                                                                   |
+| `recent`                                                                                    | Newest requests. `--limit --compact`                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `get <id>` / `get-response <id>`                                                            | Full request / just the response (output-control flags)                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `raw <id>`                                                                                  | Dump byte-exact raw request. `--out <file> --response`                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `export-curl <id>`                                                                          | Full self-contained curl (for the user)                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `export-curl <id> --config`                                                                 | Reusable `-K` config — faithful static snapshot of all auth headers + inline cookies (internal). `--out <file>` · `--cookie-jar` (follow rotation) · `--exclude <h>`                                                                                                                                                                                                                                                                                      |
+| **Send / edit**                                                                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `replay <id> --name <n>`                                                                    | Replay into a new named session. `--raw --collection` + connection overrides                                                                                                                                                                                                                                                                                                                                                                              |
+| `send-raw --host <h> --raw <s\|@file\|-> --name <n>`                                        | Send a raw request via a new named session. `--port --tls/--no-tls --collection`                                                                                                                                                                                                                                                                                                                                                                          |
+| `edit <id>`                                                                                 | Edit + send into replay. `--method --path --set-header --remove-header --body --replace --session --name/--new-name/--nonach --collection`                                                                                                                                                                                                                                                                                                                |
+| `edit-session <name\|id>`                                                                   | Edit + send from a session's active entry (requires `--nonach` or `--new-name`)                                                                                                                                                                                                                                                                                                                                                                           |
+| **Replay tab lookup**                                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `get-session <name\|id>`                                                                    | Session + active entry. `--compact`                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `replay-entries <name\|id>`                                                                 | Request history in a tab (alias `session-entries`). `--limit --raw`                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Sessions**                                                                                |                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `create-session <id> --name <n>`                                                            | New named session from a request. `--collection`                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `rename-session <name\|id> <new>` · `move-session <s> <collection>`                         | Rename / move                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `sessions` (alias `replay-sessions`) · `delete-sessions <id,id,…>`                          | List / delete                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Collections**                                                                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `collections` (alias `replay-collections`)                                                  | List collections                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `create-collection <name>` · `rename-collection <c> <new>` · `delete-collection <name\|id>` | Create / rename / delete                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Fuzzing**                                                                                 | `create-automate-session <id>` · `fuzz <session-id>` (configure payloads in UI)                                                                                                                                                                                                                                                                                                                                                                           |
+| **Automation**                                                                              | `run-workflow <workflow-id> <request-id>` · `call-plugin <package-manifest-id> <backend-manifest-id> <function-name> <request-id>` (plugin function receives the request ID as its single string argument)                                                                                                                                                                                                                                                |
+| **Findings**                                                                                | `findings` · `get-finding <id>` · `create-finding <id> --title …` · `update-finding <id>`                                                                                                                                                                                                                                                                                                                                                                 |
+| **Scopes**                                                                                  | `scopes` · `create-scope <name> --allow --deny` · `update-scope <id>` · `delete-scope <id>`                                                                                                                                                                                                                                                                                                                                                               |
+| **Filters**                                                                                 | `filters` · `create-filter <name> --query [--alias]` · `update-filter <id>` · `delete-filter <id>`                                                                                                                                                                                                                                                                                                                                                        |
+| **Environments**                                                                            | `envs` · `create-env <name>` · `env-set <env> <var> <val>` · `select-env [id]` · `delete-env <id>`                                                                                                                                                                                                                                                                                                                                                        |
+| **Projects**                                                                                | `projects` · `select-project <id>`                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Tasks**                                                                                   | `tasks` · `cancel-task <id>`                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Hosted files**                                                                            | `hosted-files` · `delete-hosted-file <id>`                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Intercept**                                                                               | `intercept-status` · `intercept-enable` · `intercept-disable`                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Match & Replace**                                                                         | `mr-rules` · `mr-collections` · `create-mr-rule --section … [--operation] [--match-*] [--replace/--workflow] [--name --collection --condition --sources]` · `test-mr-rule --raw … --section …` (preview, no-op) · `toggle-mr-rule <id> --on\|--off` · `rename-mr-rule <id> <n>` · `move-mr-rule <id> <coll>` · `update-mr-rule <id> …` · `delete-mr-rule <id>` · `create-mr-collection <n>` · `rename-mr-collection <c> <n>` · `delete-mr-collection <c>` |
+| **Info / auth**                                                                             | `viewer` · `plugins` · `health` · `setup <pat> [url] [--proxy]` · `auth-status`                                                                                                                                                                                                                                                                                                                                                                           |
 
 ---
 
@@ -505,7 +512,8 @@ Built on `@caido/sdk-client` v0.2.0+. No raw `fetch` — high-level SDK methods 
 ```
 caido-client.ts          # CLI entry — arg parsing + dispatch
 lib/
-  client.ts              # SDK Client singleton, SecretsTokenCache, auth, resolveProxy
+    client.ts              # SDK Client singleton and CaidoTokenCache
+    settings.ts            # CaidoGlobalSettings + per-URL CaidoInstance
   graphql.ts             # gql docs for features not in the SDK
   output.ts              # raw formatting (truncation, headers-only, raw→curl)
   types.ts               # OutputOpts
