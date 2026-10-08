@@ -1,4 +1,6 @@
 /** Shared types for caido-mode CLI */
+export type JsonValue =
+  boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 export interface OutputOpts {
   maxBodyLines: number;

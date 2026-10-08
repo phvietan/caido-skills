@@ -100,6 +100,7 @@ const DEBUG = process.env.DEBUG === "1";
 type CliValues = Record<string, string | boolean | string[] | undefined>;
 
 const STRING_OPTIONS = [
+  "args",
   "after",
   "alias",
   "allow",
@@ -250,7 +251,8 @@ const COMMANDS: Record<string, string> = {
   setup: "Configure authentication for a Caido instance",
   "auth-status": "Show authentication status",
   "run-workflow": "Run an active workflow with a saved request",
-  "call-plugin": "Call a plugin backend function with a request ID",
+  "call-plugin":
+    "Call a plugin backend function with JSON arguments or a request ID",
 };
 
 const OUTPUT_OPTIONS = [
@@ -291,6 +293,7 @@ const MR_OPTIONS = [
 ];
 
 const COMMAND_OPTIONS: Record<string, string[]> = {
+  "call-plugin": ["args"],
   search: [
     "limit",
     "after",
@@ -368,6 +371,7 @@ const COMMAND_OPTIONS: Record<string, string[]> = {
 };
 
 const OPTION_DESCRIPTIONS: Record<string, string> = {
+  args: "JSON array of function arguments; use [] for no arguments",
   alias: "short alias for the filter preset",
   allow: "comma-separated allowed host patterns",
   deny: "comma-separated denied host patterns",
@@ -544,7 +548,7 @@ const COMMAND_USAGE: Record<string, [string, string]> = {
     "11111111-1111-4111-8111-111111111111 123",
   ],
   "call-plugin": [
-    "<package-manifest-id> <backend-manifest-id> <function-name> <request-id>",
+    "<package-manifest-id> <backend-manifest-id> <function-name> [request-id]",
     "my-plugin backend processRequest 123",
   ],
 };
@@ -618,7 +622,7 @@ export function createProgram(
       "run-workflow":
         "Requires an active workflow. Returns a task ID; submission does not mean execution has finished.",
       "call-plugin":
-        "Use manifest IDs from plugins, not installation UUIDs. The registered backend function must accept one request-ID string.",
+        "Use manifest IDs from plugins, not installation UUIDs. Supply a request ID or --args, not both.\n\nJSON argument examples (use your plugin's documented backend functions):\n  caido-client call-plugin my-plugin backend getStatus --args '[]'\n  caido-client call-plugin my-plugin backend analyze --args '[\"123\", {\"headers\": true}]'",
       fuzz: "Configure payload markers and wordlists in the Caido UI before starting.",
       "select-env": "Omit env-id to deselect the current environment.",
       "toggle-mr-rule": "Pass exactly one of --on/--enable or --off/--disable.",
@@ -1448,13 +1452,19 @@ async function main() {
     }
 
     case "call-plugin": {
-      if (!args[1] || !args[2] || !args[3] || !args[4]) {
+      if (!args[1] || !args[2] || !args[3]) {
         console.error(
-          "Usage: caido-client call-plugin <package-manifest-id> <backend-manifest-id> <function-name> <request-id>",
+          "Usage: caido-client call-plugin <package-manifest-id> <backend-manifest-id> <function-name> [request-id] [--args '<JSON-array>']",
         );
         process.exit(1);
       }
-      await cmdCallPlugin(args[1], args[2], args[3], args[4]);
+      await cmdCallPlugin(
+        args[1],
+        args[2],
+        args[3],
+        args[4],
+        stringOption(values, "args"),
+      );
       break;
     }
 

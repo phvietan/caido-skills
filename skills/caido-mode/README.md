@@ -277,8 +277,16 @@ bun run caido-client.ts run-workflow <workflow-id> <request-id>
 bun run caido-client.ts call-plugin <package-manifest-id> <backend-manifest-id> <function-name> <request-id>
 ```
 
-Plugin functions have plugin-defined signatures. `call-plugin` expects the selected
-function to accept one string argument containing the Caido request ID.
+Plugin functions have plugin-defined signatures. A positional request ID passes
+one string argument. Use `--args` for a JSON array of arbitrary arguments instead:
+
+```sh
+caido-client call-plugin my-plugin backend getStatus --args '[]'
+caido-client call-plugin my-plugin backend analyze --args '["123", {"headers": true}]'
+```
+
+These function names are illustrative; use the installed plugin's documented backend API.
+Supply either a request ID or `--args`, not both. Arguments cannot contain `null`.
 
 ### Tasks, Projects, Info & Health
 

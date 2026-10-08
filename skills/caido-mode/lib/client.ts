@@ -20,6 +20,7 @@ import { Client, type TokenCache, type CachedToken } from "@caido/sdk-client";
 import { CaidoGlobalSettings, CaidoInstance } from "./settings";
 import gql from "graphql-tag";
 import * as G from "./graphql";
+import type { JsonValue } from "./types";
 
 /**
  * Keep the SDK's chatter (e.g. "[caido] Loaded token from cache") off stdout so command
@@ -100,7 +101,7 @@ export class CaidoClient {
     packageManifestId: string,
     backendManifestId: string,
     functionName: string,
-    args: string[],
+    args: JsonValue[],
   ): Promise<unknown> {
     const pluginPackage =
       await this.sdk.plugin.pluginPackage(packageManifestId);

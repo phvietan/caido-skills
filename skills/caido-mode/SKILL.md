@@ -1,14 +1,29 @@
 ---
 name: caido-mode
-description: Full Caido SDK integration for Claude Code. Search HTTP history with HTTPQL, test with curl proxied through Caido (caching auth in reusable static curl config files), add match & replace rules, and organize handoffs into named replay sessions and collections - all via the official @caido/sdk-client. PAT auth recommended.
-tags: [worker]
+description: Operate Caido through the caido-client CLI. Use for searching HTTP history with HTTPQL, testing through the Caido proxy, organizing Replay handoffs, managing findings and match-and-replace rules, or invoking active workflows and plugin backend functions.
+metadata:
+  tags: worker
 ---
 
 # Caido Mode Skill
 
 A CLI over Caido's API (built on the official `@caido/sdk-client`) for HTTP-history-driven
-testing. The tool lives at `~/.claude/skills/caido-mode/caido-client.ts`; every command is
-`bun run caido-client.ts <command>` and outputs JSON unless noted.
+testing. Run the examples from this skill's directory; do not assume a Claude-specific install
+location. Use `bun run caido-client.ts <command>`, or `./dist/caido-client <command>` after
+`bun run build`. If installed on PATH, `caido-client <command>` is equivalent.
+Output is JSON unless a command or option requests text, raw bytes, or compact output.
+
+Use the CLI's command-specific help to discover arguments, options, and examples:
+
+```bash
+bun run caido-client.ts --help
+bun run caido-client.ts search --help
+bun run caido-client.ts call-plugin --help
+```
+
+Options belong to their respective commands, not every command. This skill covers operating
+caido-client; it does not require any particular third-party plugin. Run mutations, workflows,
+and plugin functions only within the user's requested scope.
 
 ## How to operate (read this first)
 
@@ -152,9 +167,9 @@ bun run caido-client.ts auth-status     # prints "proxy": "http://localhost:8080
 `-x <proxy> -k` yourself. Override the proxy only if its listener differs from the API URL —
 `setup --proxy <addr>` or `export CAIDO_PROXY=<addr>`.
 
-> Get the proxy from `auth-status` (the `proxy`/`activeUrl` fields) — **don't parse `secrets.json`
-> directly.** Auth is URL-keyed now: the address lives under `.caido.default` / `.caido.instances`,
-> not `.caido.url`.
+> Get the proxy from `auth-status` (the `proxy`/`activeUrl` fields), rather than parsing credential
+> files. Settings live in `~/.config/caido-client/settings.json` (or `CAIDO_SETTINGS_PATH`), with
+> top-level `default` and URL-keyed `instances` fields.
 
 ---
 
@@ -208,7 +223,7 @@ bun run caido-client.ts search 'req.host.cont:"api"' --asc --limit 50   # oldest
 bun run caido-client.ts recent --compact            # newest requests, one line each
 bun run caido-client.ts get 8431 --compact          # full details (JSON) when you need them
 bun run caido-client.ts get-response 8431 --compact
-bun run caido-client.ts raw 8431 --out /tmp/caido/target.com/body.json   # dump bytes (e.g. a body)
+bun run caido-client.ts raw 8431 --out /tmp/caido/target.com/request.txt   # full raw HTTP request, not just its body
 ```
 
 - **`search` is NEWEST FIRST by default** (descending by request id). `--limit N` therefore returns
@@ -357,7 +372,7 @@ bun run caido-client.ts delete-mr-rule <id>
 
 Manage collections with `mr-collections`, `create-mr-collection`, `rename-mr-collection`,
 `delete-mr-collection`; `move-mr-rule <id> <collection>`; `update-mr-rule <id> …` re-specs a rule
-(same flags as create); `rename-mr-rule <id> <name>`.
+(rule configuration flags; use `move-mr-rule` to change collection); `rename-mr-rule <id> <name>`.
 
 ---
 
@@ -432,6 +447,39 @@ preset:"My Filter"                              # saved filter preset
 
 ## Other capabilities (reference)
 
+### Active workflows and plugin backend functions
+
+```bash
+# Submit a saved request to an active workflow (substitute its actual ID).
+bun run caido-client.ts run-workflow WORKFLOW_ID 8431
+
+# Discover installed plugin packages.
+bun run caido-client.ts plugins
+
+# Example backend API: analyzeRequest(requestId).
+bun run caido-client.ts call-plugin PACKAGE_ID BACKEND_ID analyzeRequest 8431
+
+# Example backend API: analyze(requestId, options).
+bun run caido-client.ts call-plugin PACKAGE_ID BACKEND_ID analyze --args '["8431",{"headers":true}]'
+
+# Example backend API with no arguments.
+bun run caido-client.ts call-plugin PACKAGE_ID BACKEND_ID getStatus --args '[]'
+```
+
+The plugin functions above are illustrative, not built-in APIs. Get package/backend manifest
+IDs and the function name/signature from the installed plugin's documentation or source; do not
+guess them from a UI label. Only exposed backend functions are callable, not frontend menu
+commands automatically.
+
+Use either the positional request ID (passed as one string argument) **or** `--args`, never both.
+`--args` must be a JSON array of positional arguments; nested `null` values and non-finite numbers
+are rejected. Quote JSON to preserve it through the shell. To invoke two independent functions,
+make two calls using their documented signatures.
+
+`run-workflow` returns a task, not proof of completion; inspect `tasks` as needed.
+`call-plugin` returns the backend value under `result`. Inspect the plugin's own result/error
+contract: a successful CLI call does not guarantee that the plugin reports application success.
+
 ### Findings — surface in Caido's Findings tab
 
 ```bash
@@ -454,7 +502,8 @@ bun run caido-client.ts create-env "IDOR-Test"; bun run caido-client.ts env-set 
 
 ```bash
 bun run caido-client.ts create-automate-session 8431   # configure payloads in UI, then: fuzz <session-id>
-bun run caido-client.ts intercept-status | intercept-enable | intercept-disable
+bun run caido-client.ts intercept-status
+# Only when requested: intercept-enable or intercept-disable
 bun run caido-client.ts projects ; bun run caido-client.ts viewer ; bun run caido-client.ts plugins
 ```
 
@@ -490,7 +539,7 @@ id**; output is JSON unless noted. Run `--help` for full flag lists.
 | `collections` (alias `replay-collections`)                                                  | List collections                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `create-collection <name>` · `rename-collection <c> <new>` · `delete-collection <name\|id>` | Create / rename / delete                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Fuzzing**                                                                                 | `create-automate-session <id>` · `fuzz <session-id>` (configure payloads in UI)                                                                                                                                                                                                                                                                                                                                                                           |
-| **Automation**                                                                              | `run-workflow <workflow-id> <request-id>` · `call-plugin <package-manifest-id> <backend-manifest-id> <function-name> <request-id>` (plugin function receives the request ID as its single string argument)                                                                                                                                                                                                                                                |
+| **Automation** | `run-workflow <workflow-id> <request-id>` · `call-plugin <package-manifest-id> <backend-manifest-id> <function-name> [request-id] [--args '<JSON-array>']` (provide either a request ID or JSON arguments; see automation guidance above) |
 | **Findings**                                                                                | `findings` · `get-finding <id>` · `create-finding <id> --title …` · `update-finding <id>`                                                                                                                                                                                                                                                                                                                                                                 |
 | **Scopes**                                                                                  | `scopes` · `create-scope <name> --allow --deny` · `update-scope <id>` · `delete-scope <id>`                                                                                                                                                                                                                                                                                                                                                               |
 | **Filters**                                                                                 | `filters` · `create-filter <name> --query [--alias]` · `update-filter <id>` · `delete-filter <id>`                                                                                                                                                                                                                                                                                                                                                        |
@@ -506,18 +555,20 @@ id**; output is JSON unless noted. Run `--help` for full flag lists.
 
 ## Architecture
 
-Built on `@caido/sdk-client` v0.2.0+. No raw `fetch` — high-level SDK methods plus
-`client.graphql.query/mutation` with `gql` documents for the few features the SDK doesn't expose.
+Built on `@caido/sdk-client`. `CaidoClient` encapsulates SDK calls and GraphQL operations;
+command handlers handle CLI input and output.
 
 ```
-caido-client.ts          # CLI entry — arg parsing + dispatch
+caido-client.ts          # Commander commands, options, examples, help, and dispatch
 lib/
-    client.ts              # SDK Client singleton and CaidoTokenCache
-    settings.ts            # CaidoGlobalSettings + per-URL CaidoInstance
+  client.ts              # CaidoClient facade, SDK singleton, private token-cache adapter
+  settings.ts            # CaidoGlobalSettings + per-URL CaidoInstance
+  version.ts             # CLI version (injected during build)
   graphql.ts             # gql docs for features not in the SDK
   output.ts              # raw formatting (truncation, headers-only, raw→curl)
   types.ts               # OutputOpts
   commands/
+    automation.ts        # active workflows and plugin backend calls
     requests.ts          # search, recent, get, get-response, raw, export-curl (+ --config)
     replay.ts            # replay, send-raw, edit, sessions, collections (CRLF-normalized), automate
     findings.ts          # findings
@@ -529,7 +580,7 @@ lib/
 
 ---
 
-## Instructions for Claude (checklist)
+## Agent checklist
 
 1. **Test with `curl`, always through Caido** — the proxy must be in the path (config does this;
    otherwise `-x <proxy>`). **Exception:** bruteforce/fuzzing (`ffuf`) or 100+ requests at once go
@@ -547,10 +598,8 @@ lib/
 
 ## Operational notes (shell gotchas)
 
-- **Don't batch CLI calls inside `while`/`for` loops.** Some shells strip `PATH` inside loop
-  subshells, so `head`/`python3`/etc. become "command not found" and the loop body fails silently
-  (sessions look like they weren't created). Run each `send-raw`/`create-session` as an individual
-  top-level command, or as a standalone `bash` script with an explicit `export PATH=…`.
+- **Check exit status when batching calls.** Stop on failures and inspect results before retrying
+  mutations; retries can create duplicate sessions or repeat plugin side effects.
 - **`search --ids-only` returns a JSON array** (`["123"]`), not a bare id — unwrap before reuse,
   e.g. `ID=$(… --ids-only | jq -r '.[0]')`.
 - **`sessions` / `collections` now list everything** (paginated, not just the first page), so
